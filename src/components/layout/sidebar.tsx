@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -78,20 +79,15 @@ export function Sidebar() {
             )}
         >
             {/* Logo */}
-            <div className="flex items-center gap-3 px-5 h-[var(--header-height)] border-b border-white/[0.06] flex-shrink-0">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-display font-bold text-sm">S</span>
-                </div>
-                {!collapsed && (
-                    <div className="animate-fade-in overflow-hidden">
-                        <p className="font-display font-semibold text-sm text-white leading-tight truncate">
-                            She Does Socials
-                        </p>
-                        <p className="text-[10px] text-sidebar-text-muted truncate">
-                            Social Media CRM
-                        </p>
-                    </div>
-                )}
+            <div className="flex items-center justify-center px-3 py-4 border-b border-white/[0.06] flex-shrink-0">
+                <Image
+                    src="/logo.png"
+                    alt="She Does Socials"
+                    width={collapsed ? 40 : 180}
+                    height={collapsed ? 40 : 56}
+                    className="object-contain"
+                    priority
+                />
             </div>
 
             {/* Navigation */}

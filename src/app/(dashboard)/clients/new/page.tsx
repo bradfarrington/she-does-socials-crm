@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,42 +11,42 @@ import {
     ArrowLeft,
     ArrowRight,
     Building2,
+    CalendarRange,
     Palette,
     Share2,
     Target,
     Check,
+    CheckCircle2,
     X,
     Plus,
+    Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import type {
-    Industry,
     BrandVoice,
     Platform,
     ContentComfort,
     PreferredContentType,
+    IndustryRecord,
 } from "@/lib/types";
 import Link from "next/link";
+import { formatCurrency } from "@/lib/utils";
+
+interface PackageRecord {
+    id: string;
+    name: string;
+    type: string;
+    price: number;
+    active: boolean;
+}
 
 const steps = [
     { id: 1, label: "Business Info", icon: Building2 },
     { id: 2, label: "Branding", icon: Palette },
-    { id: 3, label: "Social Media", icon: Share2 },
+    { id: 3, label: "Content", icon: Share2 },
     { id: 4, label: "Goals", icon: Target },
-];
-
-const industries: { value: Industry; label: string }[] = [
-    { value: "beauty", label: "Beauty" },
-    { value: "hospitality", label: "Hospitality" },
-    { value: "fitness", label: "Fitness" },
-    { value: "therapy", label: "Therapy" },
-    { value: "education", label: "Education" },
-    { value: "travel", label: "Travel" },
-    { value: "events", label: "Events" },
-    { value: "retail", label: "Retail" },
-    { value: "food_drink", label: "Food & Drink" },
-    { value: "health", label: "Health" },
-    { value: "other", label: "Other" },
+    { id: 5, label: "Strategy", icon: CalendarRange },
 ];
 
 const brandVoices: { value: BrandVoice; label: string; emoji: string }[] = [
@@ -81,9 +81,19 @@ interface FormData {
     contact_email: string;
     contact_phone: string;
     website: string;
-    industry: Industry | "";
+    industry_id: string;
     location: string;
     location_type: "local" | "national" | "online" | "";
+    package_id: string;
+    // Social handles
+    instagram_handle: string;
+    facebook_url: string;
+    tiktok_handle: string;
+    linkedin_url: string;
+    // Business expanded
+    business_description: string;
+    target_audience: string;
+    usp: string;
     // Step 2
     brand_colours: string[];
     brand_voice: BrandVoice[];
@@ -92,43 +102,96 @@ interface FormData {
     // Step 3
     platforms: Platform[];
     posting_frequency: string;
+    content_looking_for: string;
+    content_not_working: string;
+    content_themes: string;
+    comfortable_on_camera: ContentComfort | "";
+    preferred_content_types: PreferredContentType[];
+    content_boundaries: string;
     // Step 4
     success_definition: string;
     focus: ("sales" | "awareness" | "community")[];
     short_term_campaigns: string;
     long_term_vision: string;
-    comfortable_on_camera: ContentComfort | "";
-    preferred_content_types: PreferredContentType[];
-    content_boundaries: string;
+    // Step 5 — Strategy
+    strategy_month_1_goal: string;
+    strategy_month_1_actions: string[];
+    strategy_month_2_goal: string;
+    strategy_month_2_actions: string[];
+    strategy_month_3_goal: string;
+    strategy_month_3_actions: string[];
 }
 
 export default function NewClientPage() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(1);
     const [newColour, setNewColour] = useState("#f29a5e");
+    const [industries, setIndustries] = useState<IndustryRecord[]>([]);
+    const [packages, setPackages] = useState<PackageRecord[]>([]);
+    const [submitting, setSubmitting] = useState(false);
     const [formData, setFormData] = useState<FormData>({
         business_name: "",
         contact_name: "",
         contact_email: "",
         contact_phone: "",
         website: "",
-        industry: "",
+        industry_id: "",
         location: "",
         location_type: "",
+        package_id: "",
+        instagram_handle: "",
+        facebook_url: "",
+        tiktok_handle: "",
+        linkedin_url: "",
+        business_description: "",
+        target_audience: "",
+        usp: "",
         brand_colours: [],
         brand_voice: [],
         words_love: "",
         words_avoid: "",
         platforms: [],
         posting_frequency: "",
+        content_looking_for: "",
+        content_not_working: "",
+        content_themes: "",
+        comfortable_on_camera: "",
+        preferred_content_types: [],
+        content_boundaries: "",
         success_definition: "",
         focus: [],
         short_term_campaigns: "",
         long_term_vision: "",
-        comfortable_on_camera: "",
-        preferred_content_types: [],
-        content_boundaries: "",
+        strategy_month_1_goal: "",
+        strategy_month_1_actions: [""],
+        strategy_month_2_goal: "",
+        strategy_month_2_actions: [""],
+        strategy_month_3_goal: "",
+        strategy_month_3_actions: [""],
     });
+
+    const fetchIndustries = useCallback(async () => {
+        try {
+            const [indRes, pkgRes] = await Promise.all([
+                fetch("/api/industries"),
+                fetch("/api/packages"),
+            ]);
+            if (indRes.ok) {
+                const data = await indRes.json();
+                setIndustries(data);
+            }
+            if (pkgRes.ok) {
+                const data = await pkgRes.json();
+                setPackages(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch data:", err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchIndustries();
+    }, [fetchIndustries]);
 
     const updateField = (field: keyof FormData, value: unknown) => {
         setFormData((prev) => ({ ...prev, [field]: value }));
@@ -157,9 +220,64 @@ export default function NewClientPage() {
     };
 
     const handleSubmit = async () => {
-        // TODO: Save to Supabase
-        console.log("Form data:", formData);
-        router.push("/clients");
+        if (submitting) return;
+        setSubmitting(true);
+        try {
+            const res = await fetch("/api/clients", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    business_name: formData.business_name,
+                    contact_name: formData.contact_name,
+                    contact_email: formData.contact_email,
+                    contact_phone: formData.contact_phone || null,
+                    website: formData.website || null,
+                    industry_id: formData.industry_id || null,
+                    package_id: formData.package_id || null,
+                    location: formData.location || null,
+                    location_type: formData.location_type || null,
+                    brand_colours: formData.brand_colours,
+                    brand_voice: formData.brand_voice,
+                    words_love: formData.words_love || null,
+                    words_avoid: formData.words_avoid || null,
+                    platforms: formData.platforms,
+                    posting_frequency: formData.posting_frequency || null,
+                    success_definition: formData.success_definition || null,
+                    focus: formData.focus,
+                    short_term_campaigns: formData.short_term_campaigns || null,
+                    long_term_vision: formData.long_term_vision || null,
+                    comfortable_on_camera: formData.comfortable_on_camera || null,
+                    preferred_content_types: formData.preferred_content_types,
+                    content_boundaries: formData.content_boundaries || null,
+                    instagram_handle: formData.instagram_handle || null,
+                    facebook_url: formData.facebook_url || null,
+                    tiktok_handle: formData.tiktok_handle || null,
+                    linkedin_url: formData.linkedin_url || null,
+                    business_description: formData.business_description || null,
+                    target_audience: formData.target_audience || null,
+                    usp: formData.usp || null,
+                    content_looking_for: formData.content_looking_for || null,
+                    content_not_working: formData.content_not_working || null,
+                    content_themes: formData.content_themes || null,
+                    strategy_month_1_goal: formData.strategy_month_1_goal || null,
+                    strategy_month_1_actions: formData.strategy_month_1_actions.filter(Boolean),
+                    strategy_month_2_goal: formData.strategy_month_2_goal || null,
+                    strategy_month_2_actions: formData.strategy_month_2_actions.filter(Boolean),
+                    strategy_month_3_goal: formData.strategy_month_3_goal || null,
+                    strategy_month_3_actions: formData.strategy_month_3_actions.filter(Boolean),
+                }),
+            });
+            if (res.ok) {
+                router.push("/clients");
+            } else {
+                const err = await res.json();
+                console.error("Failed to create client:", err);
+            }
+        } catch (err) {
+            console.error("Failed to create client:", err);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -274,19 +392,27 @@ export default function NewClientPage() {
                                 <div className="flex flex-wrap gap-2">
                                     {industries.map((ind) => (
                                         <button
-                                            key={ind.value}
+                                            key={ind.id}
                                             type="button"
-                                            onClick={() => updateField("industry", ind.value)}
+                                            onClick={() => updateField("industry_id", ind.id)}
                                             className={cn(
                                                 "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
-                                                formData.industry === ind.value
+                                                formData.industry_id === ind.id
                                                     ? "bg-brand-50 text-brand-700 border-brand-300"
                                                     : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
                                             )}
                                         >
-                                            {ind.label}
+                                            {ind.name}
                                         </button>
                                     ))}
+                                    {industries.length === 0 && (
+                                        <p className="text-xs text-text-tertiary">
+                                            No industries configured.{" "}
+                                            <Link href="/settings" className="text-brand-500 hover:underline">
+                                                Add some in Settings
+                                            </Link>
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -313,6 +439,96 @@ export default function NewClientPage() {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Package */}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-text-secondary">
+                                    Package
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {packages.filter((p) => p.active).map((pkg) => (
+                                        <button
+                                            key={pkg.id}
+                                            type="button"
+                                            onClick={() => updateField("package_id", formData.package_id === pkg.id ? "" : pkg.id)}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-full text-xs font-medium transition-all border",
+                                                formData.package_id === pkg.id
+                                                    ? "bg-brand-50 text-brand-700 border-brand-300"
+                                                    : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
+                                            )}
+                                        >
+                                            {pkg.name} · {formatCurrency(pkg.price)}
+                                        </button>
+                                    ))}
+                                    {packages.filter((p) => p.active).length === 0 && (
+                                        <p className="text-xs text-text-tertiary">
+                                            No packages created yet.{" "}
+                                            <Link href="/packages" className="text-brand-500 hover:underline">
+                                                Add some in Packages
+                                            </Link>
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Social Handles */}
+                            <div className="space-y-2 pt-2">
+                                <label className="block text-sm font-medium text-text-secondary">
+                                    Social Handles
+                                </label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="Instagram"
+                                        placeholder="@glowstudio"
+                                        value={formData.instagram_handle}
+                                        onChange={(e) => updateField("instagram_handle", e.target.value)}
+                                    />
+                                    <Input
+                                        label="TikTok"
+                                        placeholder="@glowstudio"
+                                        value={formData.tiktok_handle}
+                                        onChange={(e) => updateField("tiktok_handle", e.target.value)}
+                                    />
+                                    <Input
+                                        label="Facebook"
+                                        placeholder="https://facebook.com/glowstudio"
+                                        value={formData.facebook_url}
+                                        onChange={(e) => updateField("facebook_url", e.target.value)}
+                                    />
+                                    <Input
+                                        label="LinkedIn"
+                                        placeholder="https://linkedin.com/in/..."
+                                        value={formData.linkedin_url}
+                                        onChange={(e) => updateField("linkedin_url", e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Business Expanded */}
+                            <div className="space-y-4 pt-2 border-t border-border-light">
+                                <h3 className="text-sm font-semibold text-text-primary pt-2">About the Business</h3>
+                                <Textarea
+                                    label="Description"
+                                    placeholder="Tell us about this business..."
+                                    value={formData.business_description}
+                                    onChange={(e) => updateField("business_description", e.target.value)}
+                                />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Textarea
+                                        label="Target Audience"
+                                        placeholder="e.g. Women 25-40, interested in wellness and self-care..."
+                                        value={formData.target_audience}
+                                        onChange={(e) => updateField("target_audience", e.target.value)}
+                                    />
+                                    <Textarea
+                                        label="Unique Selling Point (USP)"
+                                        placeholder="What makes them different from competitors?"
+                                        value={formData.usp}
+                                        onChange={(e) => updateField("usp", e.target.value)}
+                                    />
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
@@ -330,12 +546,7 @@ export default function NewClientPage() {
                                     Brand Colours
                                 </label>
                                 <div className="flex items-center gap-3">
-                                    <input
-                                        type="color"
-                                        value={newColour}
-                                        onChange={(e) => setNewColour(e.target.value)}
-                                        className="w-10 h-10 rounded-lg cursor-pointer border border-border"
-                                    />
+                                    <ColourPicker value={newColour} onChange={setNewColour} />
                                     <Input
                                         value={newColour}
                                         onChange={(e) => setNewColour(e.target.value)}
@@ -415,11 +626,11 @@ export default function NewClientPage() {
                     </Card>
                 )}
 
-                {/* Step 3: Social Media */}
+                {/* Step 3: Content & Social */}
                 {currentStep === 3 && (
                     <Card className="animate-fade-in">
                         <CardHeader>
-                            <CardTitle>Social Media Accounts</CardTitle>
+                            <CardTitle>Content & Social Media</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-3">
@@ -457,6 +668,84 @@ export default function NewClientPage() {
                                 value={formData.posting_frequency}
                                 onChange={(e) => updateField("posting_frequency", e.target.value)}
                             />
+
+                            {/* Content Wants & Needs */}
+                            <div className="space-y-4 pt-2 border-t border-border-light">
+                                <h3 className="text-sm font-semibold text-text-primary pt-2">Wants & Needs for Content</h3>
+                                <Textarea
+                                    label="What content are they looking for?"
+                                    placeholder="e.g. Engaging reels, educational carousels, brand story content..."
+                                    value={formData.content_looking_for}
+                                    onChange={(e) => updateField("content_looking_for", e.target.value)}
+                                />
+                                <Textarea
+                                    label="What's not currently working?"
+                                    placeholder="e.g. Low engagement on static posts, inconsistent posting..."
+                                    value={formData.content_not_working}
+                                    onChange={(e) => updateField("content_not_working", e.target.value)}
+                                />
+                                <Textarea
+                                    label="Content themes / topics"
+                                    placeholder="e.g. Behind the scenes, client transformations, tips & education..."
+                                    value={formData.content_themes}
+                                    onChange={(e) => updateField("content_themes", e.target.value)}
+                                />
+                            </div>
+
+                            {/* Camera Comfort */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-text-secondary">
+                                    Comfortable on camera?
+                                </label>
+                                <div className="flex gap-2">
+                                    {(["yes", "no", "sometimes"] as const).map((option) => (
+                                        <button
+                                            key={option}
+                                            type="button"
+                                            onClick={() => updateField("comfortable_on_camera", option)}
+                                            className={cn(
+                                                "px-4 py-2 rounded-lg text-sm font-medium transition-all border capitalize",
+                                                formData.comfortable_on_camera === option
+                                                    ? "bg-brand-50 text-brand-700 border-brand-300"
+                                                    : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
+                                            )}
+                                        >
+                                            {option}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Preferred Content Types */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-text-secondary">
+                                    Preferred Content Types
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {contentTypes.map((type) => (
+                                        <button
+                                            key={type.value}
+                                            type="button"
+                                            onClick={() => toggleArrayItem("preferred_content_types", type.value)}
+                                            className={cn(
+                                                "px-3 py-2 rounded-lg text-sm font-medium transition-all border",
+                                                formData.preferred_content_types.includes(type.value)
+                                                    ? "bg-brand-50 text-brand-700 border-brand-300"
+                                                    : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
+                                            )}
+                                        >
+                                            {type.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <Textarea
+                                label="Content Boundaries"
+                                placeholder="e.g. Therapy clients - avoid direct CTAs, no before/after images..."
+                                value={formData.content_boundaries}
+                                onChange={(e) => updateField("content_boundaries", e.target.value)}
+                            />
                         </CardContent>
                     </Card>
                 )}
@@ -465,7 +754,7 @@ export default function NewClientPage() {
                 {currentStep === 4 && (
                     <Card className="animate-fade-in">
                         <CardHeader>
-                            <CardTitle>Goals & Preferences</CardTitle>
+                            <CardTitle>Goals & End Goal</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <Textarea
@@ -512,61 +801,79 @@ export default function NewClientPage() {
                                     onChange={(e) => updateField("long_term_vision", e.target.value)}
                                 />
                             </div>
+                        </CardContent>
+                    </Card>
+                )}
 
-                            {/* Camera Comfort */}
-                            <div className="space-y-3">
-                                <label className="block text-sm font-medium text-text-secondary">
-                                    Comfortable on camera?
-                                </label>
-                                <div className="flex gap-2">
-                                    {(["yes", "no", "sometimes"] as const).map((option) => (
-                                        <button
-                                            key={option}
-                                            type="button"
-                                            onClick={() => updateField("comfortable_on_camera", option)}
-                                            className={cn(
-                                                "px-4 py-2 rounded-lg text-sm font-medium transition-all border capitalize",
-                                                formData.comfortable_on_camera === option
-                                                    ? "bg-brand-50 text-brand-700 border-brand-300"
-                                                    : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
-                                            )}
-                                        >
-                                            {option}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+                {/* Step 5: Strategy */}
+                {currentStep === 5 && (
+                    <Card className="animate-fade-in">
+                        <CardHeader>
+                            <CardTitle>3 Month Strategy Plan</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-8">
+                            {([1, 2, 3] as const).map((month) => {
+                                const goalField = `strategy_month_${month}_goal` as keyof FormData;
+                                const actionsField = `strategy_month_${month}_actions` as keyof FormData;
+                                const actions = (formData[actionsField] as string[]) || [""];
+                                const colours = [
+                                    { border: "border-l-brand-400", badge: "bg-brand-50 text-brand-700" },
+                                    { border: "border-l-lavender-400", badge: "bg-lavender-50 text-lavender-600" },
+                                    { border: "border-l-sage-400", badge: "bg-sage-50 text-sage-700" },
+                                ];
+                                const monthColour = colours[month - 1];
 
-                            {/* Preferred Content */}
-                            <div className="space-y-3">
-                                <label className="block text-sm font-medium text-text-secondary">
-                                    Preferred Content Types
-                                </label>
-                                <div className="flex flex-wrap gap-2">
-                                    {contentTypes.map((type) => (
-                                        <button
-                                            key={type.value}
-                                            type="button"
-                                            onClick={() => toggleArrayItem("preferred_content_types", type.value)}
-                                            className={cn(
-                                                "px-3 py-2 rounded-lg text-sm font-medium transition-all border",
-                                                formData.preferred_content_types.includes(type.value)
-                                                    ? "bg-brand-50 text-brand-700 border-brand-300"
-                                                    : "bg-surface border-border text-text-secondary hover:bg-surface-hover"
-                                            )}
-                                        >
-                                            {type.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <Textarea
-                                label="Content Boundaries"
-                                placeholder="e.g. Therapy clients - avoid direct CTAs, no before/after images..."
-                                value={formData.content_boundaries}
-                                onChange={(e) => updateField("content_boundaries", e.target.value)}
-                            />
+                                return (
+                                    <div key={month} className={cn("pl-4 border-l-4 space-y-4", monthColour.border)}>
+                                        <div className="flex items-center gap-2">
+                                            <Badge size="sm" className={monthColour.badge}>Month {month}</Badge>
+                                        </div>
+                                        <Textarea
+                                            label="Goal"
+                                            placeholder={`What is the main goal for month ${month}?`}
+                                            value={formData[goalField] as string}
+                                            onChange={(e) => updateField(goalField, e.target.value)}
+                                        />
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-medium text-text-secondary">Actions / Tasks</label>
+                                            {actions.map((action, i) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-sage-400 flex-shrink-0" />
+                                                    <input
+                                                        type="text"
+                                                        value={action}
+                                                        onChange={(e) => {
+                                                            const updated = [...actions];
+                                                            updated[i] = e.target.value;
+                                                            updateField(actionsField, updated);
+                                                        }}
+                                                        placeholder={`Action item ${i + 1}`}
+                                                        className="flex h-9 flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
+                                                    />
+                                                    {actions.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                updateField(actionsField, actions.filter((_, idx) => idx !== i));
+                                                            }}
+                                                            className="p-1.5 rounded-lg hover:bg-rose-50 text-text-tertiary hover:text-rose-500 transition-all"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => updateField(actionsField, [...actions, ""])}
+                                                className="text-xs font-medium text-brand-600 hover:text-brand-700 flex items-center gap-1"
+                                            >
+                                                <Plus className="w-3 h-3" />Add action
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </CardContent>
                     </Card>
                 )}
@@ -582,14 +889,18 @@ export default function NewClientPage() {
                         Previous
                     </Button>
 
-                    {currentStep < 4 ? (
+                    {currentStep < 5 ? (
                         <Button onClick={() => setCurrentStep(currentStep + 1)}>
                             Next
                             <ArrowRight className="w-4 h-4" />
                         </Button>
                     ) : (
-                        <Button onClick={handleSubmit} variant="success">
-                            <Check className="w-4 h-4" />
+                        <Button onClick={handleSubmit} variant="success" disabled={submitting}>
+                            {submitting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Check className="w-4 h-4" />
+                            )}
                             Create Client
                         </Button>
                     )}

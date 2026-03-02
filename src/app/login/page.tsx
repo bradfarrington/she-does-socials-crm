@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sparkles } from "lucide-react";
@@ -9,14 +10,25 @@ export default function LoginPage() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // TODO: Supabase auth
-        setTimeout(() => {
+        setError(null);
+
+        const supabase = createClient();
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            setError(error.message);
+            setIsLoading(false);
+        } else {
             window.location.href = "/dashboard";
-        }, 1000);
+        }
     };
 
     return (
@@ -54,6 +66,11 @@ export default function LoginPage() {
                             onChange={(e) => setPassword(e.target.value)}
                             required
                         />
+                        {error && (
+                            <p className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">
+                                {error}
+                            </p>
+                        )}
                         <Button type="submit" className="w-full" isLoading={isLoading}>
                             Sign In
                         </Button>

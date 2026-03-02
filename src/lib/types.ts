@@ -14,20 +14,22 @@ export interface User {
     updated_at: string;
 }
 
-// ---------- Clients ----------
+// ---------- Industries ----------
 
-export type Industry =
-    | "beauty"
-    | "hospitality"
-    | "fitness"
-    | "therapy"
-    | "education"
-    | "travel"
-    | "events"
-    | "retail"
-    | "food_drink"
-    | "health"
-    | "other";
+export interface IndustryRecord {
+    id: string;
+    name: string;
+    slug: string;
+    colour: string;
+    bg: string;
+    sort_order: number;
+    created_at: string;
+}
+
+// Keep as string for backwards compatibility — now dynamic from DB
+export type Industry = string;
+
+// ---------- Clients ----------
 
 export type BrandVoice =
     | "friendly"
@@ -64,7 +66,7 @@ export interface Client {
     contact_email: string;
     contact_phone?: string;
     website?: string;
-    industry: Industry;
+    industry_id?: string;
     location?: string;
     location_type?: "local" | "national" | "online";
     is_priority: boolean;

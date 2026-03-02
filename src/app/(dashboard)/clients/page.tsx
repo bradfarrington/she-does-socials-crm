@@ -1,92 +1,99 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
     Users,
     Plus,
     Search,
-    Filter,
     Star,
-    MoreHorizontal,
     ArrowUpRight,
-    Building2,
+    Loader2,
 } from "lucide-react";
-import { cn, getInitials } from "@/lib/utils";
-import type { Industry } from "@/lib/types";
+import { cn, getInitials, formatCurrency } from "@/lib/utils";
+import type { IndustryRecord } from "@/lib/types";
 
-// Industry config
-const industryConfig: Record<Industry, { label: string; colour: string; bg: string }> = {
-    beauty: { label: "Beauty", colour: "text-rose-600", bg: "bg-rose-50" },
-    hospitality: { label: "Hospitality", colour: "text-brand-700", bg: "bg-brand-50" },
-    fitness: { label: "Fitness", colour: "text-sage-600", bg: "bg-sage-50" },
-    therapy: { label: "Therapy", colour: "text-lavender-500", bg: "bg-lavender-50" },
-    education: { label: "Education", colour: "text-blue-600", bg: "bg-blue-50" },
-    travel: { label: "Travel", colour: "text-cyan-600", bg: "bg-cyan-50" },
-    events: { label: "Events", colour: "text-pink-600", bg: "bg-pink-50" },
-    retail: { label: "Retail", colour: "text-amber-600", bg: "bg-amber-50" },
-    food_drink: { label: "Food & Drink", colour: "text-orange-600", bg: "bg-orange-50" },
-    health: { label: "Health", colour: "text-emerald-600", bg: "bg-emerald-50" },
-    other: { label: "Other", colour: "text-warm-600", bg: "bg-warm-100" },
-};
+interface PackageRecord {
+    id: string;
+    name: string;
+    type: string;
+    price: number;
+    active: boolean;
+}
 
-// Demo clients for visual preview — will be replaced with Supabase data
-const demoClients = [
-    {
-        id: "1",
-        business_name: "Glow Studio",
-        contact_name: "Sarah Mitchell",
-        contact_email: "sarah@glowstudio.com",
-        industry: "beauty" as Industry,
-        is_priority: true,
-        is_archived: false,
-        location_type: "local",
-    },
-    {
-        id: "2",
-        business_name: "The Garden Kitchen",
-        contact_name: "Tom Harris",
-        contact_email: "tom@gardenkitchen.co.uk",
-        industry: "hospitality" as Industry,
-        is_priority: false,
-        is_archived: false,
-        location_type: "local",
-    },
-    {
-        id: "3",
-        business_name: "FitLife Academy",
-        contact_name: "Jade Cooper",
-        contact_email: "jade@fitlife.com",
-        industry: "fitness" as Industry,
-        is_priority: true,
-        is_archived: false,
-        location_type: "national",
-    },
-];
+interface ClientWithIndustry {
+    id: string;
+    business_name: string;
+    contact_name: string;
+    contact_email: string;
+    industry_id: string | null;
+    is_priority: boolean;
+    is_archived: boolean;
+    location_type: string | null;
+    package_id: string | null;
+    industries: IndustryRecord | null;
+    packages: PackageRecord | null;
+}
 
 export default function ClientsPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
+    const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
+    const [clients, setClients] = useState<ClientWithIndustry[]>([]);
+    const [industries, setIndustries] = useState<IndustryRecord[]>([]);
+    const [packages, setPackages] = useState<PackageRecord[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const filteredClients = demoClients.filter((client) => {
+    const fetchData = useCallback(async () => {
+        try {
+            const [clientsRes, industriesRes, packagesRes] = await Promise.all([
+                fetch("/api/clients"),
+                fetch("/api/industries"),
+                fetch("/api/packages"),
+            ]);
+            if (clientsRes.ok) {
+                const clientsData = await clientsRes.json();
+                setClients(clientsData);
+            }
+            if (industriesRes.ok) {
+                const industriesData = await industriesRes.json();
+                setIndustries(industriesData);
+            }
+            if (packagesRes.ok) {
+                const packagesData = await packagesRes.json();
+                setPackages(packagesData);
+            }
+        } catch (err) {
+            console.error("Failed to fetch data:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const filteredClients = clients.filter((client) => {
         const matchesSearch =
             client.business_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             client.contact_name.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesIndustry =
-            selectedIndustry === "all" || client.industry === selectedIndustry;
-        return matchesSearch && matchesIndustry;
+            selectedIndustry === "all" || client.industry_id === selectedIndustry;
+        const matchesPackage =
+            selectedPackages.length === 0 || (client.package_id !== null && selectedPackages.includes(client.package_id));
+        return matchesSearch && matchesIndustry && matchesPackage;
     });
 
     return (
         <>
             <Header
                 title="Clients"
-                subtitle={`${demoClients.length} clients`}
+                subtitle={`${clients.length} client${clients.length !== 1 ? "s" : ""}`}
                 actions={
                     <Link href="/clients/new" className={buttonVariants({ size: "sm" })}>
                         <Plus className="w-4 h-4" />
@@ -121,25 +128,67 @@ export default function ClientsPage() {
                         >
                             All
                         </button>
-                        {Object.entries(industryConfig).map(([key, config]) => (
+                        {industries.map((industry) => (
                             <button
-                                key={key}
-                                onClick={() => setSelectedIndustry(key)}
+                                key={industry.id}
+                                onClick={() => setSelectedIndustry(industry.id)}
                                 className={cn(
                                     "px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
-                                    selectedIndustry === key
-                                        ? `${config.bg} ${config.colour}`
+                                    selectedIndustry === industry.id
+                                        ? `${industry.bg} ${industry.colour}`
                                         : "bg-surface border border-border text-text-secondary hover:bg-surface-hover"
                                 )}
                             >
-                                {config.label}
+                                {industry.name}
                             </button>
                         ))}
                     </div>
+
+                    {/* Package Filter (multi-select) */}
+                    {packages.length > 0 && (
+                        <div className="flex items-center gap-2 overflow-x-auto">
+                            <span className="text-xs font-medium text-text-tertiary whitespace-nowrap">Package:</span>
+                            {packages.filter((p) => p.active).map((pkg) => {
+                                const isSelected = selectedPackages.includes(pkg.id);
+                                return (
+                                    <button
+                                        key={pkg.id}
+                                        onClick={() =>
+                                            setSelectedPackages((prev) =>
+                                                isSelected
+                                                    ? prev.filter((id) => id !== pkg.id)
+                                                    : [...prev, pkg.id]
+                                            )
+                                        }
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-full text-xs font-medium transition-all whitespace-nowrap",
+                                            isSelected
+                                                ? "bg-lavender-50 text-lavender-500"
+                                                : "bg-surface border border-border text-text-secondary hover:bg-surface-hover"
+                                        )}
+                                    >
+                                        {pkg.name}
+                                    </button>
+                                );
+                            })}
+                            {selectedPackages.length > 0 && (
+                                <button
+                                    onClick={() => setSelectedPackages([])}
+                                    className="px-2 py-1.5 rounded-full text-xs font-medium text-text-tertiary hover:text-error transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Client Grid */}
-                {filteredClients.length === 0 ? (
+                {loading ? (
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="w-6 h-6 text-text-tertiary animate-spin" />
+                    </div>
+                ) : filteredClients.length === 0 ? (
                     <Card>
                         <CardContent className="py-16 text-center">
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-50 mb-4">
@@ -162,7 +211,7 @@ export default function ClientsPage() {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {filteredClients.map((client, index) => {
-                            const industry = industryConfig[client.industry];
+                            const industry = client.industries;
                             return (
                                 <Link key={client.id} href={`/clients/${client.id}`}>
                                     <Card
@@ -197,16 +246,29 @@ export default function ClientsPage() {
                                             </div>
 
                                             <div className="flex items-center gap-2 mt-3">
-                                                <Badge
-                                                    variant="default"
-                                                    size="sm"
-                                                    className={`${industry.bg} ${industry.colour}`}
-                                                >
-                                                    {industry.label}
-                                                </Badge>
-                                                <Badge variant="outline" size="sm">
-                                                    {client.location_type}
-                                                </Badge>
+                                                {industry && (
+                                                    <Badge
+                                                        variant="default"
+                                                        size="sm"
+                                                        className={`${industry.bg} ${industry.colour}`}
+                                                    >
+                                                        {industry.name}
+                                                    </Badge>
+                                                )}
+                                                {client.packages && (
+                                                    <Badge
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="bg-lavender-50 text-lavender-500"
+                                                    >
+                                                        {client.packages.name}
+                                                    </Badge>
+                                                )}
+                                                {client.location_type && (
+                                                    <Badge variant="outline" size="sm">
+                                                        {client.location_type}
+                                                    </Badge>
+                                                )}
                                             </div>
                                         </CardContent>
                                     </Card>
