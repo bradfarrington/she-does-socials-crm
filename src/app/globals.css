@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+/* ============================================
+   She Does Socials — Design System
+   Calm, visual, intuitive — not corporate SaaS
+   ============================================ */
+
+@theme {
+  /* Brand Palette */
+  --color-brand-50: #fef7f0;
+  --color-brand-100: #fdeee1;
+  --color-brand-200: #fbd9be;
+  --color-brand-300: #f7bc8f;
+  --color-brand-400: #f29a5e;
+  --color-brand-500: #ee7d3b;
+  --color-brand-600: #df6221;
+  --color-brand-700: #b94d1b;
+  --color-brand-800: #943f1e;
+  --color-brand-900: #78361c;
+
+  /* Soft Pinks */
+  --color-rose-50: #fdf2f5;
+  --color-rose-100: #fce7ed;
+  --color-rose-200: #fad0dc;
+  --color-rose-300: #f6a8c1;
+  --color-rose-400: #ef749e;
+  --color-rose-500: #e5497e;
+  --color-rose-600: #d12962;
+
+  /* Sage / Calm Greens */
+  --color-sage-50: #f4f7f4;
+  --color-sage-100: #e6ede6;
+  --color-sage-200: #cddcce;
+  --color-sage-300: #a6c0a8;
+  --color-sage-400: #7a9e7d;
+  --color-sage-500: #5a815d;
+  --color-sage-600: #466949;
+
+  /* Lavender */
+  --color-lavender-50: #f5f3ff;
+  --color-lavender-100: #ede9fe;
+  --color-lavender-200: #ddd6fe;
+  --color-lavender-300: #c4b5fd;
+  --color-lavender-400: #a78bfa;
+  --color-lavender-500: #8b5cf6;
+
+  /* Warm Neutrals */
+  --color-warm-50: #faf9f7;
+  --color-warm-100: #f5f3ef;
+  --color-warm-200: #e8e4dd;
+  --color-warm-300: #d6cfC4;
+  --color-warm-400: #b8ad9e;
+  --color-warm-500: #9f9182;
+  --color-warm-600: #857667;
+  --color-warm-700: #6b5f52;
+  --color-warm-800: #504740;
+  --color-warm-900: #3a332e;
+
+  /* Semantic */
+  --color-success: #5a815d;
+  --color-warning: #ee7d3b;
+  --color-error: #e5497e;
+  --color-info: #8b5cf6;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-secondary: #faf9f7;
+  --color-surface-tertiary: #f5f3ef;
+  --color-surface-hover: #f0ede8;
+  --color-surface-active: #e8e4dd;
+
+  /* Borders */
+  --color-border: #e8e4dd;
+  --color-border-light: #f0ede8;
+  --color-border-strong: #d6cfC4;
+
+  /* Text */
+  --color-text-primary: #3a332e;
+  --color-text-secondary: #6b5f52;
+  --color-text-tertiary: #9f9182;
+  --color-text-inverse: #ffffff;
+
+  /* Sidebar */
+  --color-sidebar-bg: #2d2825;
+  --color-sidebar-hover: #3d3632;
+  --color-sidebar-active: #4d443f;
+  --color-sidebar-text: #e8e4dd;
+  --color-sidebar-text-muted: #9f9182;
+  --color-sidebar-accent: #f29a5e;
+
+  /* Typography */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Sizing */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+  --header-height: 64px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.06);
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 12px 0 rgb(0 0 0 / 0.08);
+
+  /* Radii */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-full: 9999px;
+}
+
+/* Fonts loaded via Next.js font optimization in layout.tsx */
+
+/* Base styles */
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface-secondary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-warm-300);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-warm-400);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-brand-400);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, opacity, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(90deg, var(--color-warm-100) 25%, var(--color-warm-200) 50%, var(--color-warm-100) 75%);
+  background-size: 200% 100%;
+}
