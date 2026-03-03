@@ -224,19 +224,21 @@ export type ContentPurpose =
 
 export interface ContentPost {
     id: string;
-    client_id: string;
     user_id: string;
-    campaign_id?: string;
+    client_id: string;
     platform: Platform;
     content_type: ContentType;
     status: ContentStatus;
     purpose?: ContentPurpose;
     scheduled_date?: string;
+    scheduled_time?: string;
     caption?: string;
     hook?: string;
     cta?: string;
     notes?: string;
     media_urls: string[];
+    meta_post_id?: string;
+    meta_synced_at?: string;
     created_at: string;
     updated_at: string;
 }

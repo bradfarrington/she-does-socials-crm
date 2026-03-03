@@ -1003,13 +1003,95 @@ export default function ClientDetailPage() {
                     </CardContent>
                 </Card>
 
-                {/* Metadata footer */}
+                {/* ──────── 7. SCHEDULED CONTENT ──────── */}
+                <ClientContentSection clientId={id} />
                 <div className="flex items-center justify-between text-xs text-text-tertiary pt-2 border-t border-border">
                     <span>Created {formatDate(client.created_at)}</span>
                     <span>Last updated {formatDate(client.updated_at)}</span>
                 </div>
             </div>
         </>
+    );
+}
+
+/* ── Client Content Section ── */
+interface ClientPost {
+    id: string;
+    platform: string;
+    content_type: string;
+    status: string;
+    caption?: string;
+    scheduled_date?: string;
+    scheduled_time?: string;
+    meta_post_id?: string;
+}
+
+const postStatusConfig: Record<string, { label: string; colour: string; bg: string }> = {
+    idea: { label: "Idea", colour: "text-warm-600", bg: "bg-warm-100" },
+    planned: { label: "Planned", colour: "text-purple-600", bg: "bg-purple-50" },
+    drafted: { label: "Drafted", colour: "text-orange-600", bg: "bg-orange-50" },
+    scheduled: { label: "Scheduled", colour: "text-blue-600", bg: "bg-blue-50" },
+    live: { label: "Live", colour: "text-sage-700", bg: "bg-sage-50" },
+};
+
+function ClientContentSection({ clientId }: { clientId: string }) {
+    const [posts, setPosts] = React.useState<ClientPost[]>([]);
+    const [loadingPosts, setLoadingPosts] = React.useState(true);
+
+    React.useEffect(() => {
+        fetch(`/api/posts?client_id=${clientId}`)
+            .then((r) => r.ok ? r.json() : [])
+            .then((data: ClientPost[]) => setPosts(data || []))
+            .catch(() => setPosts([]))
+            .finally(() => setLoadingPosts(false));
+    }, [clientId]);
+
+    return (
+        <Card className="lg:col-span-2">
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <CalendarRange className="w-4 h-4 text-brand-500" /> Scheduled Content
+                    </CardTitle>
+                    <Badge variant="outline" size="sm">{posts.length} posts</Badge>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {loadingPosts ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
+                    </div>
+                ) : posts.length === 0 ? (
+                    <EmptyState>No content scheduled for this client yet.</EmptyState>
+                ) : (
+                    <div className="space-y-2">
+                        {posts.map((post) => {
+                            const status = postStatusConfig[post.status] || postStatusConfig.idea;
+                            const platform = platformConfig[post.platform];
+                            return (
+                                <div key={post.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-border hover:border-border-strong hover:shadow-card-hover transition-all group">
+                                    <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0", platform?.bg || "bg-warm-100")}>
+                                        <span className="text-xs font-bold">{post.platform.slice(0, 2).toUpperCase()}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-text-primary truncate">{post.caption || "Untitled post"}</p>
+                                        <p className="text-xs text-text-tertiary capitalize">{post.content_type.replace("_", " ")}</p>
+                                    </div>
+                                    {post.scheduled_date && (
+                                        <span className="text-xs text-text-tertiary flex-shrink-0">
+                                            {new Date(post.scheduled_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                            {post.scheduled_time && ` · ${post.scheduled_time}`}
+                                        </span>
+                                    )}
+                                    <Badge size="sm" className={cn(status.bg, status.colour)}>{status.label}</Badge>
+                                    {post.meta_post_id && <CheckCircle2 className="w-4 h-4 text-blue-500 flex-shrink-0" />}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 
