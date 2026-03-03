@@ -35,6 +35,8 @@ interface ClientWithIndustry {
     is_archived: boolean;
     location_type: string | null;
     package_id: string | null;
+    logo_url: string | null;
+    status: string;
     industries: IndustryRecord | null;
     packages: PackageRecord | null;
 }
@@ -47,6 +49,7 @@ export default function ClientsPage() {
     const [industries, setIndustries] = useState<IndustryRecord[]>([]);
     const [packages, setPackages] = useState<PackageRecord[]>([]);
     const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<"active" | "past" | "all">("active");
 
     const fetchData = useCallback(async () => {
         try {
@@ -86,7 +89,9 @@ export default function ClientsPage() {
             selectedIndustry === "all" || client.industry_id === selectedIndustry;
         const matchesPackage =
             selectedPackages.length === 0 || (client.package_id !== null && selectedPackages.includes(client.package_id));
-        return matchesSearch && matchesIndustry && matchesPackage;
+        const matchesStatus =
+            statusFilter === "all" || (client.status || "active") === statusFilter;
+        return matchesSearch && matchesIndustry && matchesPackage && matchesStatus;
     });
 
     return (
@@ -114,6 +119,24 @@ export default function ClientsPage() {
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all"
                         />
+                    </div>
+
+                    {/* Status Filter */}
+                    <div className="flex items-center gap-1 bg-surface-secondary rounded-lg p-0.5 border border-border">
+                        {(["active", "past", "all"] as const).map((s) => (
+                            <button
+                                key={s}
+                                onClick={() => setStatusFilter(s)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all capitalize",
+                                    statusFilter === s
+                                        ? "bg-white text-text-primary shadow-sm"
+                                        : "text-text-tertiary hover:text-text-secondary"
+                                )}
+                            >
+                                {s === "all" ? "All" : s === "active" ? "Active" : "Past"}
+                            </button>
+                        ))}
                     </div>
 
                     <div className="flex items-center gap-2 overflow-x-auto">
@@ -222,11 +245,17 @@ export default function ClientsPage() {
                                         <CardContent className="p-5">
                                             <div className="flex items-start gap-3">
                                                 {/* Avatar */}
-                                                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-200 to-rose-200 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-sm font-semibold text-brand-800">
-                                                        {getInitials(client.business_name)}
-                                                    </span>
-                                                </div>
+                                                {client.logo_url ? (
+                                                    <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 border border-border">
+                                                        <img src={client.logo_url} alt={client.business_name} className="w-full h-full object-cover" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand-200 to-rose-200 flex items-center justify-center flex-shrink-0">
+                                                        <span className="text-sm font-semibold text-brand-800">
+                                                            {getInitials(client.business_name)}
+                                                        </span>
+                                                    </div>
+                                                )}
 
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2">
@@ -267,6 +296,11 @@ export default function ClientsPage() {
                                                 {client.location_type && (
                                                     <Badge variant="outline" size="sm">
                                                         {client.location_type}
+                                                    </Badge>
+                                                )}
+                                                {(client.status || "active") === "past" && (
+                                                    <Badge variant="default" size="sm" className="bg-warm-100 text-warm-600">
+                                                        Past
                                                     </Badge>
                                                 )}
                                             </div>

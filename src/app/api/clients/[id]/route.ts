@@ -59,7 +59,7 @@ export async function PATCH(
     return NextResponse.json(data);
 }
 
-// DELETE /api/clients/[id] — archive a client (soft delete)
+// DELETE /api/clients/[id] — permanently delete a client
 export async function DELETE(
     _request: Request,
     { params }: { params: Promise<{ id: string }> }
@@ -74,7 +74,7 @@ export async function DELETE(
 
     const { error } = await supabase
         .from("clients")
-        .update({ is_archived: true, updated_at: new Date().toISOString() })
+        .delete()
         .eq("id", id)
         .eq("user_id", user.id);
 

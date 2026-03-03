@@ -14,6 +14,35 @@ export interface User {
     updated_at: string;
 }
 
+// ---------- Meta Business Suite ----------
+
+export interface MetaConnection {
+    id: string;
+    user_id: string;
+    meta_user_id: string;
+    meta_user_name?: string;
+    access_token: string;
+    token_expires_at?: string;
+    connected_at: string;
+}
+
+export interface MetaPage {
+    id: string;
+    name: string;
+    category?: string;
+    picture_url?: string;
+    followers_count: number;
+    instagram?: {
+        id: string;
+        username: string;
+        name: string;
+        profile_picture_url?: string;
+        followers_count?: number;
+    } | null;
+    already_synced: boolean;
+    existing_status?: string | null;
+}
+
 // ---------- Industries ----------
 
 export interface IndustryRecord {
@@ -72,6 +101,7 @@ export interface Client {
     is_priority: boolean;
     is_archived: boolean;
     notes?: string;
+    meta_page_id?: string;
     created_at: string;
     updated_at: string;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,27 @@ import {
     Target,
     Users,
     Award,
+    Heart,
+    MessageCircle,
+    Send,
+    Bookmark,
+    Share2,
+    ThumbsUp,
+    Repeat2,
+    MoreHorizontal,
+    Globe,
+    Play,
+    Volume2,
+    Upload,
+    Video,
 } from "lucide-react";
+
+// ─── Simple Client (for dropdown + platform filtering) ──
+interface SimpleClient {
+    id: string;
+    business_name: string;
+    platforms: string[];
+}
 
 // ─── Platform Config ────────────────────────────────────
 const platformConfig: Record<Platform, { label: string; colour: string; bg: string; icon: React.ElementType }> = {
@@ -123,16 +143,318 @@ function formatDateKey(d: Date): string { return d.toISOString().split("T")[0]; 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+// ─── Platform Preview Components ────────────────────────
+function InstagramPreview({ clientName, hook, caption, cta, mediaUrl, mediaType }: { clientName: string; hook?: string; caption?: string; cta?: string; mediaUrl?: string; mediaType?: "image" | "video" }) {
+    const hasContent = hook || caption || cta;
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-[2px]">
+                    <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+                        <span className="text-[9px] font-bold text-gray-700">{clientName.charAt(0)}</span>
+                    </div>
+                </div>
+                <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-900">{clientName || "Client Name"}</p>
+                </div>
+                <MoreHorizontal className="w-4 h-4 text-gray-500" />
+            </div>
+            {/* Image / Video */}
+            <div className="w-full aspect-square bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
+                {mediaUrl ? (
+                    mediaType === "video" ? (
+                        <video src={mediaUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                        <img src={mediaUrl} alt="Post media" className="w-full h-full object-cover" />
+                    )
+                ) : (
+                    <div className="text-center">
+                        <Image className="w-8 h-8 text-gray-300 mx-auto mb-1" />
+                        <span className="text-[10px] text-gray-400">Post Preview</span>
+                    </div>
+                )}
+            </div>
+            {/* Actions */}
+            <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-3.5">
+                    <Heart className="w-5 h-5 text-gray-800" />
+                    <MessageCircle className="w-5 h-5 text-gray-800" />
+                    <Send className="w-5 h-5 text-gray-800" />
+                </div>
+                <Bookmark className="w-5 h-5 text-gray-800" />
+            </div>
+            {/* Caption area */}
+            <div className="px-3 pb-3">
+                <p className="text-xs text-gray-500 mb-1">0 likes</p>
+                {hasContent ? (
+                    <div className="text-xs text-gray-800 leading-relaxed">
+                        <span className="font-semibold">{clientName || "client"}</span>{" "}
+                        {hook && <><span className="font-bold">{hook}</span><br /></>}
+                        {caption && <span>{caption}</span>}
+                        {cta && <><br /><br /><span className="text-gray-500">{cta}</span></>}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-400 italic">Caption will appear here…</p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function FacebookPreview({ clientName, hook, caption, cta, mediaUrl, mediaType }: { clientName: string; hook?: string; caption?: string; cta?: string; mediaUrl?: string; mediaType?: "image" | "video" }) {
+    const hasContent = hook || caption || cta;
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+                <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">{clientName.charAt(0)}</span>
+                </div>
+                <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-900">{clientName || "Client Name"}</p>
+                    <p className="text-[10px] text-gray-500 flex items-center gap-1">Just now · <Globe className="w-2.5 h-2.5" /></p>
+                </div>
+                <MoreHorizontal className="w-4 h-4 text-gray-500" />
+            </div>
+            {/* Post text */}
+            <div className="px-3 pb-2">
+                {hasContent ? (
+                    <div className="text-xs text-gray-800 leading-relaxed">
+                        {hook && <p className="font-bold mb-1">{hook}</p>}
+                        {caption && <p>{caption}</p>}
+                        {cta && <p className="mt-2 text-blue-600 font-medium">{cta}</p>}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-400 italic">Post text will appear here…</p>
+                )}
+            </div>
+            {/* Image / Video */}
+            <div className="w-full aspect-video bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
+                {mediaUrl ? (
+                    mediaType === "video" ? (
+                        <video src={mediaUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                        <img src={mediaUrl} alt="Post media" className="w-full h-full object-cover" />
+                    )
+                ) : (
+                    <div className="text-center">
+                        <Image className="w-8 h-8 text-gray-300 mx-auto mb-1" />
+                        <span className="text-[10px] text-gray-400">Media Preview</span>
+                    </div>
+                )}
+            </div>
+            {/* Reactions bar */}
+            <div className="px-3 py-1.5 border-t border-gray-100">
+                <div className="flex items-center gap-1 mb-1.5">
+                    <div className="flex -space-x-1">
+                        <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center"><ThumbsUp className="w-2.5 h-2.5 text-white" /></div>
+                        <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center"><Heart className="w-2.5 h-2.5 text-white" /></div>
+                    </div>
+                    <span className="text-[10px] text-gray-500 ml-1">0</span>
+                </div>
+                <div className="flex items-center border-t border-gray-100 pt-1.5">
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><ThumbsUp className="w-3.5 h-3.5" /> Like</button>
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><MessageCircle className="w-3.5 h-3.5" /> Comment</button>
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><Share2 className="w-3.5 h-3.5" /> Share</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function TikTokPreview({ clientName, hook, caption, cta, mediaUrl, mediaType }: { clientName: string; hook?: string; caption?: string; cta?: string; mediaUrl?: string; mediaType?: "image" | "video" }) {
+    const hasContent = hook || caption || cta;
+    return (
+        <div className="bg-black rounded-xl overflow-hidden shadow-sm relative" style={{ aspectRatio: "9/14" }}>
+            {/* Video / Image background */}
+            {mediaUrl ? (
+                mediaType === "video" ? (
+                    <video src={mediaUrl} className="absolute inset-0 w-full h-full object-cover" muted loop autoPlay playsInline />
+                ) : (
+                    <img src={mediaUrl} alt="Post media" className="absolute inset-0 w-full h-full object-cover" />
+                )
+            ) : (
+                <div className="absolute inset-0 bg-gradient-to-b from-gray-800 via-gray-900 to-black flex items-center justify-center">
+                    <div className="text-center">
+                        <Play className="w-10 h-10 text-white/30 mx-auto mb-1" />
+                        <span className="text-[10px] text-white/30">Video Preview</span>
+                    </div>
+                </div>
+            )}
+            {/* Dark overlay for readability when media present */}
+            {mediaUrl && <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60" />}
+            {/* Hook overlay at top */}
+            {hook && (
+                <div className="absolute top-4 left-3 right-12">
+                    <p className="text-white text-sm font-bold drop-shadow-lg leading-snug">{hook}</p>
+                </div>
+            )}
+            {/* Right sidebar icons */}
+            <div className="absolute right-2 bottom-24 flex flex-col items-center gap-4">
+                <div className="w-9 h-9 rounded-full bg-white/20 border-2 border-white flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-white">{clientName.charAt(0)}</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                    <Heart className="w-5 h-5 text-white" />
+                    <span className="text-[9px] text-white">0</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                    <MessageCircle className="w-5 h-5 text-white" />
+                    <span className="text-[9px] text-white">0</span>
+                </div>
+                <div className="flex flex-col items-center gap-0.5">
+                    <Share2 className="w-5 h-5 text-white" />
+                    <span className="text-[9px] text-white">0</span>
+                </div>
+            </div>
+            {/* Bottom caption */}
+            <div className="absolute bottom-3 left-3 right-12">
+                <p className="text-white text-xs font-semibold mb-1">@{clientName.toLowerCase().replace(/\s+/g, "")}</p>
+                {hasContent ? (
+                    <div className="text-[11px] text-white/90 leading-relaxed">
+                        {caption && <span>{caption}</span>}
+                        {cta && <span className="text-white/60"> {cta}</span>}
+                    </div>
+                ) : (
+                    <p className="text-[11px] text-white/40">Caption will appear here…</p>
+                )}
+                <div className="flex items-center gap-1.5 mt-2">
+                    <Volume2 className="w-3 h-3 text-white/60" />
+                    <div className="h-0.5 flex-1 bg-white/20 rounded-full">
+                        <div className="h-full w-1/3 bg-white rounded-full" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LinkedInPreview({ clientName, hook, caption, cta, mediaUrl, mediaType }: { clientName: string; hook?: string; caption?: string; cta?: string; mediaUrl?: string; mediaType?: "image" | "video" }) {
+    const hasContent = hook || caption || cta;
+    return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 px-3 py-2.5">
+                <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">{clientName.charAt(0)}</span>
+                </div>
+                <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-900">{clientName || "Client Name"}</p>
+                    <p className="text-[10px] text-gray-500">Business · Just now</p>
+                </div>
+                <MoreHorizontal className="w-4 h-4 text-gray-500" />
+            </div>
+            {/* Post text */}
+            <div className="px-3 pb-2.5">
+                {hasContent ? (
+                    <div className="text-xs text-gray-800 leading-relaxed">
+                        {hook && <p className="font-bold mb-1.5">{hook}</p>}
+                        {caption && <p className="whitespace-pre-wrap">{caption}</p>}
+                        {cta && <p className="mt-2 text-blue-700 font-semibold">{cta}</p>}
+                    </div>
+                ) : (
+                    <p className="text-xs text-gray-400 italic">Post text will appear here…</p>
+                )}
+            </div>
+            {/* Image / Video */}
+            <div className="w-full aspect-[1.91/1] bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center overflow-hidden">
+                {mediaUrl ? (
+                    mediaType === "video" ? (
+                        <video src={mediaUrl} className="w-full h-full object-cover" muted loop autoPlay playsInline />
+                    ) : (
+                        <img src={mediaUrl} alt="Post media" className="w-full h-full object-cover" />
+                    )
+                ) : (
+                    <div className="text-center">
+                        <Image className="w-8 h-8 text-gray-300 mx-auto mb-1" />
+                        <span className="text-[10px] text-gray-400">Media Preview</span>
+                    </div>
+                )}
+            </div>
+            {/* Engagement bar */}
+            <div className="px-3 py-1.5 border-t border-gray-100">
+                <div className="flex items-center gap-1 mb-1.5">
+                    <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center"><ThumbsUp className="w-2.5 h-2.5 text-white" /></div>
+                    <span className="text-[10px] text-gray-500">0</span>
+                </div>
+                <div className="flex items-center border-t border-gray-100 pt-1.5">
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><ThumbsUp className="w-3.5 h-3.5" /> Like</button>
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><MessageCircle className="w-3.5 h-3.5" /> Comment</button>
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><Repeat2 className="w-3.5 h-3.5" /> Repost</button>
+                    <button className="flex-1 flex items-center justify-center gap-1.5 py-1 text-[11px] text-gray-600 font-medium"><Send className="w-3.5 h-3.5" /> Send</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+const previewComponents: Record<Platform, React.FC<{ clientName: string; hook?: string; caption?: string; cta?: string; mediaUrl?: string; mediaType?: "image" | "video" }>> = {
+    instagram: InstagramPreview,
+    facebook: FacebookPreview,
+    tiktok: TikTokPreview,
+    linkedin: LinkedInPreview,
+};
+
 // ─── Post Modal ─────────────────────────────────────────
-function PostModal({ post, date, isOpen, onClose, onSave, onDelete }: { post?: ContentPost | null; date?: string; isOpen: boolean; onClose: () => void; onSave: (post: ContentPost) => void; onDelete?: (id: string) => void }) {
+function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: { post?: ContentPost | null; date?: string; isOpen: boolean; onClose: () => void; onSave: (post: ContentPost) => void; onDelete?: (id: string) => void; clients: SimpleClient[] }) {
     const isEdit = !!post;
     const [formData, setFormData] = useState<Partial<ContentPost>>({
         client_name: post?.client_name || "", platform: post?.platform || "instagram", content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getRelativeDate(0), caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "",
     });
+    const [previewPlatform, setPreviewPlatform] = useState<Platform>("instagram");
+    const [mediaPreview, setMediaPreview] = useState<{ url: string; type: "image" | "video" } | null>(null);
+    const mediaInputRef = React.useRef<HTMLInputElement>(null);
+
+    const handleMediaSelect = (file: File) => {
+        const isVideo = file.type.startsWith("video/");
+        const url = URL.createObjectURL(file);
+        setMediaPreview({ url, type: isVideo ? "video" : "image" });
+    };
+
+    const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) handleMediaSelect(file);
+    };
+
+    const handleMediaDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files?.[0];
+        if (file && (file.type.startsWith("image/") || file.type.startsWith("video/"))) {
+            handleMediaSelect(file);
+        }
+    };
+
+    const removeMedia = () => {
+        if (mediaPreview) URL.revokeObjectURL(mediaPreview.url);
+        setMediaPreview(null);
+        if (mediaInputRef.current) mediaInputRef.current.value = "";
+    };
 
     React.useEffect(() => {
         setFormData({ client_name: post?.client_name || "", platform: post?.platform || "instagram", content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getRelativeDate(0), caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "" });
     }, [post, date]);
+
+    // Get platforms for the selected client
+    const selectedClient = clients.find((c) => c.business_name === formData.client_name);
+    const clientPlatforms = (selectedClient?.platforms || []) as Platform[];
+    const availablePlatforms = clientPlatforms.length > 0 ? clientPlatforms : (Object.keys(platformConfig) as Platform[]);
+
+    // Auto-select first available platform if current one isn't available
+    React.useEffect(() => {
+        if (clientPlatforms.length > 0 && formData.platform && !clientPlatforms.includes(formData.platform)) {
+            setFormData((prev) => ({ ...prev, platform: clientPlatforms[0] }));
+        }
+        if (clientPlatforms.length > 0 && !clientPlatforms.includes(previewPlatform)) {
+            setPreviewPlatform(clientPlatforms[0]);
+        }
+    }, [formData.client_name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const clientNames = clients.length > 0
+        ? clients.map((c) => c.business_name)
+        : ["Glow Studio", "The Garden Kitchen", "FitLife Academy"];
+
+    const PreviewComponent = previewComponents[previewPlatform];
 
     if (!isOpen) return null;
 
@@ -141,86 +463,163 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete }: { post?: C
         onClose();
     };
 
-    const clients = ["Glow Studio", "The Garden Kitchen", "FitLife Academy"];
-
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-            <div className="relative bg-surface rounded-2xl border border-border shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto animate-scale-in">
-                <div className="flex items-center justify-between p-5 border-b border-border-light">
+            <div className="relative bg-surface rounded-2xl border border-border shadow-xl w-[80vw] max-w-6xl mx-4 max-h-[90vh] overflow-hidden animate-scale-in flex flex-col">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-border-light flex-shrink-0">
                     <h2 className="font-display font-semibold text-lg text-text-primary">{isEdit ? "Edit Post" : "New Post"}</h2>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-hover transition-colors"><X className="w-4 h-4 text-text-tertiary" /></button>
                 </div>
-                <div className="p-5 space-y-5">
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-medium text-text-secondary">Client</label>
-                        <select value={formData.client_name} onChange={(e) => setFormData({ ...formData, client_name: e.target.value })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all">
-                            <option value="">Select client...</option>
-                            {clients.map((c) => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+
+                {/* Two-Panel Body */}
+                <div className="flex-1 overflow-hidden grid grid-cols-5 divide-x divide-border-light">
+                    {/* Left Panel — Form (3 cols) */}
+                    <div className="col-span-3 overflow-y-auto p-5 space-y-5">
                         <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-text-secondary">Platform</label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {(Object.keys(platformConfig) as Platform[]).map((p) => { const config = platformConfig[p]; const Icon = config.icon; return (
-                                    <button key={p} onClick={() => setFormData({ ...formData, platform: p })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", formData.platform === p ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
-                                        <Icon className="w-3.5 h-3.5" />{config.label}
-                                    </button>
-                                ); })}
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-text-secondary">Type</label>
-                            <select value={formData.content_type} onChange={(e) => setFormData({ ...formData, content_type: e.target.value as ContentType })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all">
-                                {(Object.keys(contentTypeConfig) as ContentType[]).map((t) => <option key={t} value={t}>{contentTypeConfig[t].label}</option>)}
+                            <label className="block text-sm font-medium text-text-secondary">Client</label>
+                            <select value={formData.client_name} onChange={(e) => setFormData({ ...formData, client_name: e.target.value })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all">
+                                <option value="">Select client...</option>
+                                {clientNames.map((c) => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-text-secondary">Status</label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {(Object.keys(statusConfig) as ContentStatus[]).map((s) => (
-                                    <button key={s} onClick={() => setFormData({ ...formData, status: s })} className={cn("px-2.5 py-1.5 rounded-full text-xs font-medium transition-all border", formData.status === s ? `${statusConfig[s].bg} ${statusConfig[s].colour} border-transparent` : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>{statusConfig[s].label}</button>
-                                ))}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-medium text-text-secondary">Platform</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {availablePlatforms.map((p) => {
+                                        const config = platformConfig[p]; if (!config) return null; const Icon = config.icon; return (
+                                            <button key={p} onClick={() => setFormData({ ...formData, platform: p })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", formData.platform === p ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
+                                                <Icon className="w-3.5 h-3.5" />{config.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-medium text-text-secondary">Type</label>
+                                <select value={formData.content_type} onChange={(e) => setFormData({ ...formData, content_type: e.target.value as ContentType })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all">
+                                    {(Object.keys(contentTypeConfig) as ContentType[]).map((t) => <option key={t} value={t}>{contentTypeConfig[t].label}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-medium text-text-secondary">Status</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {(Object.keys(statusConfig) as ContentStatus[]).map((s) => (
+                                        <button key={s} onClick={() => setFormData({ ...formData, status: s })} className={cn("px-2.5 py-1.5 rounded-full text-xs font-medium transition-all border", formData.status === s ? `${statusConfig[s].bg} ${statusConfig[s].colour} border-transparent` : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>{statusConfig[s].label}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block text-sm font-medium text-text-secondary">Date</label>
+                                <input type="date" value={formData.scheduled_date} onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="block text-sm font-medium text-text-secondary">Date</label>
-                            <input type="date" value={formData.scheduled_date} onChange={(e) => setFormData({ ...formData, scheduled_date: e.target.value })} className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+                            <label className="block text-sm font-medium text-text-secondary">Purpose</label>
+                            <div className="flex gap-1.5">
+                                {(Object.keys(purposeConfig) as ContentPurpose[]).map((p) => {
+                                    const config = purposeConfig[p]; const Icon = config.icon; return (
+                                        <button key={p} onClick={() => setFormData({ ...formData, purpose: formData.purpose === p ? undefined : p })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", formData.purpose === p ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
+                                            <Icon className="w-3.5 h-3.5" />{config.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-medium text-text-secondary">Purpose</label>
-                        <div className="flex gap-1.5">
-                            {(Object.keys(purposeConfig) as ContentPurpose[]).map((p) => { const config = purposeConfig[p]; const Icon = config.icon; return (
-                                <button key={p} onClick={() => setFormData({ ...formData, purpose: formData.purpose === p ? undefined : p })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", formData.purpose === p ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
-                                    <Icon className="w-3.5 h-3.5" />{config.label}
+                        {/* Media Upload */}
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-medium text-text-secondary">Media</label>
+                            <input ref={mediaInputRef} type="file" accept="image/*,video/*" onChange={handleMediaChange} className="hidden" />
+                            {mediaPreview ? (
+                                <div className="relative group/media rounded-xl overflow-hidden border border-border">
+                                    {mediaPreview.type === "video" ? (
+                                        <video src={mediaPreview.url} className="w-full max-h-[200px] object-cover" muted loop autoPlay playsInline />
+                                    ) : (
+                                        <img src={mediaPreview.url} alt="Selected media" className="w-full max-h-[200px] object-cover" />
+                                    )}
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/media:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                        <button onClick={() => mediaInputRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-white/90 text-xs font-medium text-gray-800 hover:bg-white transition-colors">Replace</button>
+                                        <button onClick={removeMedia} className="px-3 py-1.5 rounded-lg bg-red-500/90 text-xs font-medium text-white hover:bg-red-500 transition-colors">Remove</button>
+                                    </div>
+                                    <div className="absolute top-2 right-2">
+                                        <Badge size="sm" className={mediaPreview.type === "video" ? "bg-black/60 text-white" : "bg-black/60 text-white"}>{mediaPreview.type === "video" ? "Video" : "Image"}</Badge>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => mediaInputRef.current?.click()}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={handleMediaDrop}
+                                    className="w-full py-8 rounded-xl border-2 border-dashed border-border hover:border-brand-300 bg-surface-secondary/50 hover:bg-brand-50/30 transition-all flex flex-col items-center gap-2 cursor-pointer group"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-surface flex items-center justify-center border border-border group-hover:border-brand-300 transition-colors">
+                                        <Upload className="w-5 h-5 text-text-tertiary group-hover:text-brand-500 transition-colors" />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium text-text-secondary">Click to upload or drag and drop</p>
+                                        <p className="text-[10px] text-text-tertiary mt-0.5">Images or videos</p>
+                                    </div>
                                 </button>
-                            ); })}
+                            )}
                         </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-medium text-text-secondary">Caption</label>
-                        <textarea value={formData.caption} onChange={(e) => setFormData({ ...formData, caption: e.target.value })} placeholder="Write your caption..." rows={3} className="flex min-h-[80px] w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary resize-y focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
+                        {/* Content fields */}
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-text-secondary">Hook</label>
-                            <input type="text" value={formData.hook} onChange={(e) => setFormData({ ...formData, hook: e.target.value })} placeholder="Opening hook..." className="flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+                            <input type="text" value={formData.hook} onChange={(e) => setFormData({ ...formData, hook: e.target.value })} placeholder="Opening hook — grabs attention..." className="flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-medium text-text-secondary">Caption</label>
+                            <textarea value={formData.caption} onChange={(e) => setFormData({ ...formData, caption: e.target.value })} placeholder="Write your caption..." rows={4} className="flex min-h-[100px] w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary resize-y focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-text-secondary">CTA</label>
-                            <input type="text" value={formData.cta} onChange={(e) => setFormData({ ...formData, cta: e.target.value })} placeholder="Call to action..." className="flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+                            <input type="text" value={formData.cta} onChange={(e) => setFormData({ ...formData, cta: e.target.value })} placeholder="Call to action — what should they do?" className="flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="block text-sm font-medium text-text-secondary">Notes</label>
+                            <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Internal notes..." rows={2} className="flex min-h-[60px] w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary resize-y focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
                         </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <label className="block text-sm font-medium text-text-secondary">Notes</label>
-                        <textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Internal notes..." rows={2} className="flex min-h-[60px] w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary resize-y focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" />
+
+                    {/* Right Panel — Platform Preview (2 cols) */}
+                    <div className="col-span-2 overflow-y-auto bg-surface-secondary/50 flex flex-col">
+                        <div className="p-4 border-b border-border-light flex-shrink-0">
+                            <h3 className="text-sm font-semibold text-text-primary mb-3">Platform Preview</h3>
+                            {/* Platform tabs */}
+                            <div className="flex items-center gap-1.5">
+                                {availablePlatforms.map((p) => {
+                                    const config = platformConfig[p]; if (!config) return null; const Icon = config.icon;
+                                    return (
+                                        <button key={p} onClick={() => setPreviewPlatform(p)} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border", previewPlatform === p ? "bg-white text-text-primary border-border shadow-sm" : "bg-transparent border-transparent text-text-tertiary hover:text-text-secondary hover:bg-surface-hover")}>
+                                            <Icon className="w-3.5 h-3.5" />{config.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        {/* Preview */}
+                        <div className="flex-1 p-5 flex items-start justify-center">
+                            <div className={cn("w-full", previewPlatform === "tiktok" ? "max-w-[260px]" : "max-w-[340px]")}>
+                                <PreviewComponent
+                                    clientName={formData.client_name || "Client Name"}
+                                    hook={formData.hook}
+                                    caption={formData.caption}
+                                    cta={formData.cta}
+                                    mediaUrl={mediaPreview?.url}
+                                    mediaType={mediaPreview?.type}
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="flex items-center justify-between p-5 border-t border-border-light">
+
+                {/* Footer */}
+                <div className="flex items-center justify-between p-5 border-t border-border-light flex-shrink-0">
                     <div>{isEdit && onDelete && <Button variant="ghost" size="sm" onClick={() => { onDelete(post!.id); onClose(); }} className="text-error hover:text-error hover:bg-rose-50"><Trash2 className="w-4 h-4" />Delete</Button>}</div>
                     <div className="flex gap-2">
                         <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
@@ -286,6 +685,17 @@ export default function ContentPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingPost, setEditingPost] = useState<ContentPost | null>(null);
     const [modalDate, setModalDate] = useState<string | undefined>();
+    const [apiClients, setApiClients] = useState<SimpleClient[]>([]);
+
+    // Fetch clients from API for the dropdown and platform filtering
+    useEffect(() => {
+        fetch("/api/clients")
+            .then((res) => res.ok ? res.json() : [])
+            .then((data: Array<{ id: string; business_name: string; platforms: string[]; status?: string }>) => {
+                setApiClients(data.filter((c) => c.status === "active").map((c) => ({ id: c.id, business_name: c.business_name, platforms: c.platforms || [] })));
+            })
+            .catch(() => setApiClients([]));
+    }, []);
 
     const postsByDate = useMemo(() => {
         const filtered = posts.filter((p) => {
@@ -298,7 +708,11 @@ export default function ContentPage() {
         return map;
     }, [posts, selectedPlatform, selectedClient]);
 
-    const clients = useMemo(() => Array.from(new Set(posts.map((p) => p.client_name))), [posts]);
+    const clients = useMemo(() => {
+        const apiNames = apiClients.map((c) => c.business_name);
+        const postNames = Array.from(new Set(posts.map((p) => p.client_name)));
+        return Array.from(new Set([...apiNames, ...postNames]));
+    }, [posts, apiClients]);
     const statusCounts = useMemo(() => { const c: Record<ContentStatus, number> = { idea: 0, planned: 0, drafted: 0, scheduled: 0, live: 0 }; posts.forEach((p) => c[p.status]++); return c; }, [posts]);
 
     const year = currentDate.getFullYear();
@@ -351,9 +765,11 @@ export default function ContentPage() {
                         </select>
                         <div className="flex items-center border border-border rounded-lg overflow-hidden">
                             <button onClick={() => setSelectedPlatform("all")} className={cn("px-2.5 py-1.5 text-xs font-medium transition-all", selectedPlatform === "all" ? "bg-brand-50 text-brand-700" : "bg-surface text-text-tertiary hover:bg-surface-hover")}>All</button>
-                            {(Object.keys(platformConfig) as Platform[]).map((p) => { const Icon = platformConfig[p].icon; return (
-                                <button key={p} onClick={() => setSelectedPlatform(selectedPlatform === p ? "all" : p)} className={cn("px-2 py-1.5 transition-all border-l border-border", selectedPlatform === p ? "bg-brand-50 text-brand-700" : "bg-surface text-text-tertiary hover:bg-surface-hover")} title={platformConfig[p].label}><Icon className="w-3.5 h-3.5" /></button>
-                            ); })}
+                            {(Object.keys(platformConfig) as Platform[]).map((p) => {
+                                const Icon = platformConfig[p].icon; return (
+                                    <button key={p} onClick={() => setSelectedPlatform(selectedPlatform === p ? "all" : p)} className={cn("px-2 py-1.5 transition-all border-l border-border", selectedPlatform === p ? "bg-brand-50 text-brand-700" : "bg-surface text-text-tertiary hover:bg-surface-hover")} title={platformConfig[p].label}><Icon className="w-3.5 h-3.5" /></button>
+                                );
+                            })}
                         </div>
                         <div className="flex items-center border border-border rounded-lg overflow-hidden">
                             <button onClick={() => setView("month")} className={cn("px-2.5 py-1.5 text-xs font-medium transition-all flex items-center gap-1.5", view === "month" ? "bg-brand-50 text-brand-700" : "bg-surface text-text-tertiary hover:bg-surface-hover")}><LayoutGrid className="w-3.5 h-3.5" />Month</button>
@@ -417,7 +833,7 @@ export default function ContentPage() {
                     </div>
                 )}
             </div>
-            <PostModal post={editingPost} date={modalDate} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSavePost} onDelete={handleDeletePost} />
+            <PostModal post={editingPost} date={modalDate} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSavePost} onDelete={handleDeletePost} clients={apiClients} />
         </>
     );
 }

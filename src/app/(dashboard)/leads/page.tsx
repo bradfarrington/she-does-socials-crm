@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,15 +10,17 @@ import type { LeadSource } from "@/lib/types";
 import {
     Plus, X, Calendar, Clock, User, AlertCircle,
     Edit3, Trash2, Instagram, Globe, MessageSquare, Users, Star,
-    TrendingUp, Target,
+    TrendingUp, Target, Package,
 } from "lucide-react";
 
 // ─── Config ─────────────────────────────────────────────
 interface PipelineStage { id: string; label: string; colour: string; bgColour: string; dotColour: string; }
 
+interface FetchedPackage { id: string; name: string; price: number; type: string; active: boolean; }
+
 interface Lead {
     id: string; business_name: string; contact_name: string; contact_email: string; contact_phone?: string;
-    stage_id: string; source: LeadSource; service_interest: string; estimated_value: number;
+    stage_id: string; source: LeadSource; package_id: string | null; package_name: string; estimated_value: number;
     priority: "high" | "medium" | "low"; notes?: string; follow_up_date?: string; created_at: string;
 }
 
@@ -27,7 +29,7 @@ const defaultStages: PipelineStage[] = [
     { id: "discovery", label: "Discovery Call", colour: "text-blue-600", bgColour: "bg-blue-50", dotColour: "bg-blue-400" },
     { id: "proposal", label: "Proposal Sent", colour: "text-brand-600", bgColour: "bg-brand-50", dotColour: "bg-brand-400" },
     { id: "follow_up", label: "Follow-Up", colour: "text-warm-600", bgColour: "bg-warm-100", dotColour: "bg-warm-400" },
-    { id: "won", label: "Won \ud83c\udf89", colour: "text-sage-600", bgColour: "bg-sage-50", dotColour: "bg-sage-500" },
+    { id: "won", label: "Won 🎉", colour: "text-sage-600", bgColour: "bg-sage-50", dotColour: "bg-sage-500" },
     { id: "lost", label: "Lost", colour: "text-rose-500", bgColour: "bg-rose-50", dotColour: "bg-rose-400" },
 ];
 
@@ -48,26 +50,37 @@ const priorityConfig = {
 function getRelativeDate(d: number): string { const dt = new Date(); dt.setDate(dt.getDate() + d); return dt.toISOString().split("T")[0]; }
 
 const demoLeads: Lead[] = [
-    { id: "1", business_name: "Bloom Beauty Bar", contact_name: "Jessica Taylor", contact_email: "jess@bloombeauty.co.uk", contact_phone: "07912 345678", stage_id: "new", source: "social_media", service_interest: "Monthly Social Management", estimated_value: 450, priority: "high", notes: "Found via Instagram DMs, very interested in full management", follow_up_date: getRelativeDate(1), created_at: getRelativeDate(-2) },
-    { id: "2", business_name: "The Fitness Hut", contact_name: "Mark Andrews", contact_email: "mark@fitnesshut.com", stage_id: "discovery", source: "referral", service_interest: "Content Creation Package", estimated_value: 600, priority: "medium", notes: "Referred by FitLife Academy", follow_up_date: getRelativeDate(3), created_at: getRelativeDate(-5) },
-    { id: "3", business_name: "Luna Yoga Studio", contact_name: "Priya Sharma", contact_email: "priya@lunayoga.co.uk", contact_phone: "07845 678901", stage_id: "proposal", source: "landing_page", service_interest: "Full Package — Social + Content + Strategy", estimated_value: 850, priority: "high", notes: "Proposal sent Tuesday, decision expected by Friday", follow_up_date: getRelativeDate(2), created_at: getRelativeDate(-7) },
-    { id: "4", business_name: "Copper & Vine", contact_name: "Amy Wheeler", contact_email: "amy@copperandvine.com", stage_id: "follow_up", source: "contact_form", service_interest: "Monthly Social Management", estimated_value: 500, priority: "medium", notes: "Needs to discuss budget with business partner", follow_up_date: getRelativeDate(5), created_at: getRelativeDate(-14) },
-    { id: "5", business_name: "Serenity Spa", contact_name: "Claire Bennett", contact_email: "claire@serenityspa.co.uk", contact_phone: "07756 234567", stage_id: "won", source: "referral", service_interest: "Full Package — Social + Content + Strategy", estimated_value: 900, priority: "high", created_at: getRelativeDate(-21) },
-    { id: "6", business_name: "Quick Bites Caf\u00e9", contact_name: "Tom Morris", contact_email: "tom@quickbites.co.uk", stage_id: "lost", source: "manual", service_interest: "One-off Campaign", estimated_value: 300, priority: "low", notes: "Budget too tight, may revisit in Q3", created_at: getRelativeDate(-30) },
-    { id: "7", business_name: "Wildflower Boutique", contact_name: "Hannah Cross", contact_email: "hannah@wildflowerboutique.co.uk", stage_id: "new", source: "social_media", service_interest: "Reel Creation Package", estimated_value: 350, priority: "medium", follow_up_date: getRelativeDate(0), created_at: getRelativeDate(-1) },
-    { id: "8", business_name: "Peak Performance PT", contact_name: "Jake Wilson", contact_email: "jake@peakpt.com", stage_id: "discovery", source: "landing_page", service_interest: "Monthly Social Management", estimated_value: 500, priority: "low", follow_up_date: getRelativeDate(4), created_at: getRelativeDate(-3) },
+    { id: "1", business_name: "Bloom Beauty Bar", contact_name: "Jessica Taylor", contact_email: "jess@bloombeauty.co.uk", contact_phone: "07912 345678", stage_id: "new", source: "social_media", package_id: null, package_name: "Monthly Social Management", estimated_value: 450, priority: "high", notes: "Found via Instagram DMs, very interested in full management", follow_up_date: getRelativeDate(1), created_at: getRelativeDate(-2) },
+    { id: "2", business_name: "The Fitness Hut", contact_name: "Mark Andrews", contact_email: "mark@fitnesshut.com", stage_id: "discovery", source: "referral", package_id: null, package_name: "Content Creation Package", estimated_value: 600, priority: "medium", notes: "Referred by FitLife Academy", follow_up_date: getRelativeDate(3), created_at: getRelativeDate(-5) },
+    { id: "3", business_name: "Luna Yoga Studio", contact_name: "Priya Sharma", contact_email: "priya@lunayoga.co.uk", contact_phone: "07845 678901", stage_id: "proposal", source: "landing_page", package_id: null, package_name: "Full Package — Social + Content + Strategy", estimated_value: 850, priority: "high", notes: "Proposal sent Tuesday, decision expected by Friday", follow_up_date: getRelativeDate(2), created_at: getRelativeDate(-7) },
+    { id: "4", business_name: "Copper & Vine", contact_name: "Amy Wheeler", contact_email: "amy@copperandvine.com", stage_id: "follow_up", source: "contact_form", package_id: null, package_name: "Monthly Social Management", estimated_value: 500, priority: "medium", notes: "Needs to discuss budget with business partner", follow_up_date: getRelativeDate(5), created_at: getRelativeDate(-14) },
+    { id: "5", business_name: "Serenity Spa", contact_name: "Claire Bennett", contact_email: "claire@serenityspa.co.uk", contact_phone: "07756 234567", stage_id: "won", source: "referral", package_id: null, package_name: "Full Package — Social + Content + Strategy", estimated_value: 900, priority: "high", created_at: getRelativeDate(-21) },
+    { id: "6", business_name: "Quick Bites Café", contact_name: "Tom Morris", contact_email: "tom@quickbites.co.uk", stage_id: "lost", source: "manual", package_id: null, package_name: "One-off Campaign", estimated_value: 300, priority: "low", notes: "Budget too tight, may revisit in Q3", created_at: getRelativeDate(-30) },
+    { id: "7", business_name: "Wildflower Boutique", contact_name: "Hannah Cross", contact_email: "hannah@wildflowerboutique.co.uk", stage_id: "new", source: "social_media", package_id: null, package_name: "Reel Creation Package", estimated_value: 350, priority: "medium", follow_up_date: getRelativeDate(0), created_at: getRelativeDate(-1) },
+    { id: "8", business_name: "Peak Performance PT", contact_name: "Jake Wilson", contact_email: "jake@peakpt.com", stage_id: "discovery", source: "landing_page", package_id: null, package_name: "Monthly Social Management", estimated_value: 500, priority: "low", follow_up_date: getRelativeDate(4), created_at: getRelativeDate(-3) },
 ];
 
 // ─── Lead Modal ─────────────────────────────────────────
-function LeadModal({ lead, isOpen, onClose, onSave, onDelete, stages }: { lead?: Lead | null; isOpen: boolean; onClose: () => void; onSave: (l: Lead) => void; onDelete?: (id: string) => void; stages: PipelineStage[] }) {
+function LeadModal({ lead, isOpen, onClose, onSave, onDelete, stages, packages }: { lead?: Lead | null; isOpen: boolean; onClose: () => void; onSave: (l: Lead) => void; onDelete?: (id: string) => void; stages: PipelineStage[]; packages: FetchedPackage[] }) {
     const isEdit = !!lead;
-    const [f, setF] = useState<Partial<Lead>>({ business_name: lead?.business_name || "", contact_name: lead?.contact_name || "", contact_email: lead?.contact_email || "", contact_phone: lead?.contact_phone || "", stage_id: lead?.stage_id || "new", source: lead?.source || "manual", service_interest: lead?.service_interest || "", estimated_value: lead?.estimated_value || 0, priority: lead?.priority || "medium", notes: lead?.notes || "", follow_up_date: lead?.follow_up_date || "" });
+    const [f, setF] = useState<Partial<Lead>>({ business_name: lead?.business_name || "", contact_name: lead?.contact_name || "", contact_email: lead?.contact_email || "", contact_phone: lead?.contact_phone || "", stage_id: lead?.stage_id || "new", source: lead?.source || "manual", package_id: lead?.package_id || null, package_name: lead?.package_name || "", estimated_value: lead?.estimated_value || 0, priority: lead?.priority || "medium", notes: lead?.notes || "", follow_up_date: lead?.follow_up_date || "" });
 
-    React.useEffect(() => { setF({ business_name: lead?.business_name || "", contact_name: lead?.contact_name || "", contact_email: lead?.contact_email || "", contact_phone: lead?.contact_phone || "", stage_id: lead?.stage_id || "new", source: lead?.source || "manual", service_interest: lead?.service_interest || "", estimated_value: lead?.estimated_value || 0, priority: lead?.priority || "medium", notes: lead?.notes || "", follow_up_date: lead?.follow_up_date || "" }); }, [lead]);
+    React.useEffect(() => { setF({ business_name: lead?.business_name || "", contact_name: lead?.contact_name || "", contact_email: lead?.contact_email || "", contact_phone: lead?.contact_phone || "", stage_id: lead?.stage_id || "new", source: lead?.source || "manual", package_id: lead?.package_id || null, package_name: lead?.package_name || "", estimated_value: lead?.estimated_value || 0, priority: lead?.priority || "medium", notes: lead?.notes || "", follow_up_date: lead?.follow_up_date || "" }); }, [lead]);
 
     if (!isOpen) return null;
 
-    const handleSave = () => { onSave({ id: lead?.id || `lead-${Date.now()}`, business_name: f.business_name || "New Business", contact_name: f.contact_name || "", contact_email: f.contact_email || "", contact_phone: f.contact_phone, stage_id: f.stage_id || "new", source: f.source || "manual", service_interest: f.service_interest || "", estimated_value: f.estimated_value || 0, priority: f.priority || "medium", notes: f.notes, follow_up_date: f.follow_up_date || undefined, created_at: lead?.created_at || getRelativeDate(0) }); onClose(); };
+    const handlePackageChange = (packageId: string) => {
+        if (!packageId) {
+            setF({ ...f, package_id: null, package_name: "", estimated_value: 0 });
+            return;
+        }
+        const pkg = packages.find((p) => p.id === packageId);
+        if (pkg) {
+            setF({ ...f, package_id: pkg.id, package_name: pkg.name, estimated_value: pkg.price });
+        }
+    };
+
+    const handleSave = () => { onSave({ id: lead?.id || `lead-${Date.now()}`, business_name: f.business_name || "New Business", contact_name: f.contact_name || "", contact_email: f.contact_email || "", contact_phone: f.contact_phone, stage_id: f.stage_id || "new", source: f.source || "manual", package_id: f.package_id || null, package_name: f.package_name || "", estimated_value: f.estimated_value || 0, priority: f.priority || "medium", notes: f.notes, follow_up_date: f.follow_up_date || undefined, created_at: lead?.created_at || getRelativeDate(0) }); onClose(); };
 
     const inputCls = "flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all";
 
@@ -90,9 +103,27 @@ function LeadModal({ lead, isOpen, onClose, onSave, onDelete, stages }: { lead?:
                         <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Priority</label><div className="flex gap-1.5">{(Object.keys(priorityConfig) as Array<keyof typeof priorityConfig>).map((p) => (<button key={p} onClick={() => setF({ ...f, priority: p })} className={cn("px-2.5 py-1.5 rounded-full text-xs font-medium transition-all border capitalize", f.priority === p ? `${priorityConfig[p].bg} ${priorityConfig[p].colour} border-transparent` : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>{priorityConfig[p].label}</button>))}</div></div>
                     </div>
                     <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Lead Source</label><div className="flex flex-wrap gap-1.5">{(Object.keys(sourceConfig) as LeadSource[]).map((s) => { const c = sourceConfig[s]; const Icon = c.icon; return (<button key={s} onClick={() => setF({ ...f, source: s })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", f.source === s ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}><Icon className="w-3.5 h-3.5" />{c.label}</button>); })}</div></div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Service Interest</label><input type="text" value={f.service_interest} onChange={(e) => setF({ ...f, service_interest: e.target.value })} placeholder="e.g. Monthly Social Management" className={inputCls} /></div>
-                        <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Estimated Value (£)</label><input type="number" value={f.estimated_value} onChange={(e) => setF({ ...f, estimated_value: Number(e.target.value) })} className={inputCls} /></div>
+                    {/* Package Suggested dropdown */}
+                    <div className="space-y-1.5">
+                        <label className="block text-sm font-medium text-text-secondary">Package Suggested</label>
+                        <div className="relative">
+                            <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none" />
+                            <select
+                                value={f.package_id || ""}
+                                onChange={(e) => handlePackageChange(e.target.value)}
+                                className={cn(inputCls, "pl-9 appearance-none")}
+                            >
+                                <option value="">Select a package…</option>
+                                {packages.filter((p) => p.active).map((p) => (
+                                    <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.price)}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {f.package_id && (
+                            <p className="text-xs text-text-tertiary flex items-center gap-1 mt-1">
+                                <TrendingUp className="w-3 h-3" />Pipeline value: <span className="font-semibold text-text-secondary">{formatCurrency(f.estimated_value || 0)}</span>
+                            </p>
+                        )}
                     </div>
                     <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Follow-Up Date</label><input type="date" value={f.follow_up_date} onChange={(e) => setF({ ...f, follow_up_date: e.target.value })} className={inputCls} /></div>
                     <div className="space-y-1.5"><label className="block text-sm font-medium text-text-secondary">Notes</label><textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} placeholder="Any notes about this lead..." rows={3} className="flex min-h-[80px] w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-text-primary placeholder:text-text-tertiary resize-y focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all" /></div>
@@ -123,7 +154,7 @@ function LeadCard({ lead, onClick, onDragStart }: { lead: Lead; onClick: () => v
                 <div className={cn("w-2 h-2 rounded-full flex-shrink-0 mt-1.5", priority.dot)} title={priority.label} />
             </div>
             <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] text-text-secondary truncate">{lead.service_interest}</span>
+                <span className="text-[10px] text-text-secondary truncate flex items-center gap-1"><Package className="w-3 h-3 text-text-tertiary" />{lead.package_name || "No package"}</span>
                 <Badge variant="brand" size="sm" className="font-semibold ml-2 flex-shrink-0">{formatCurrency(lead.estimated_value)}</Badge>
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-border-light">
@@ -141,6 +172,22 @@ export default function LeadsPage() {
     const [modalOpen, setModalOpen] = useState(false);
     const [editingLead, setEditingLead] = useState<Lead | null>(null);
     const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
+    const [packages, setPackages] = useState<FetchedPackage[]>([]);
+
+    // Fetch packages from the database
+    const fetchPackages = useCallback(async () => {
+        try {
+            const res = await fetch("/api/packages");
+            if (res.ok) {
+                const data = await res.json();
+                setPackages(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch packages:", err);
+        }
+    }, []);
+
+    useEffect(() => { fetchPackages(); }, [fetchPackages]);
 
     const stats = useMemo(() => { const pipeline = leads.filter((l) => !["won", "lost"].includes(l.stage_id)); return { total: leads.length, open: pipeline.length, pipelineValue: pipeline.reduce((s, l) => s + l.estimated_value, 0), won: leads.filter((l) => l.stage_id === "won").length, wonValue: leads.filter((l) => l.stage_id === "won").reduce((s, l) => s + l.estimated_value, 0) }; }, [leads]);
 
@@ -181,7 +228,7 @@ export default function LeadsPage() {
                     })}
                 </div>
             </div>
-            <LeadModal lead={editingLead} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} onDelete={handleDelete} stages={stages} />
+            <LeadModal lead={editingLead} isOpen={modalOpen} onClose={() => setModalOpen(false)} onSave={handleSave} onDelete={handleDelete} stages={stages} packages={packages} />
         </>
     );
 }

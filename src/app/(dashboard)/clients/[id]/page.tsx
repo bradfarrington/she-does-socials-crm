@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Header } from "@/components/layout/header";
@@ -33,9 +33,15 @@ import {
     X,
     Plus,
     Save,
+    Upload,
+    Image as ImageIcon,
+    Facebook,
+    Link2,
+    Unlink,
+    ChevronDown,
 } from "lucide-react";
 import { cn, getInitials, formatDate, formatCurrency } from "@/lib/utils";
-import type { IndustryRecord } from "@/lib/types";
+import type { IndustryRecord, MetaPage } from "@/lib/types";
 
 interface ClientDetail {
     id: string;
@@ -50,6 +56,8 @@ interface ClientDetail {
     is_priority: boolean;
     is_archived: boolean;
     notes: string | null;
+    logo_url: string | null;
+    status: string;
     brand_colours: string[];
     brand_voice: string[];
     words_love: string | null;
@@ -63,6 +71,7 @@ interface ClientDetail {
     comfortable_on_camera: string | null;
     preferred_content_types: string[];
     content_boundaries: string | null;
+    meta_page_id: string | null;
     created_at: string;
     updated_at: string;
     industries: IndustryRecord | null;
@@ -129,6 +138,15 @@ export default function ClientDetailPage() {
     const [editingSection, setEditingSection] = useState<Section | null>(null);
     const [saving, setSaving] = useState(false);
     const [draft, setDraft] = useState<Record<string, unknown>>({});
+    const [uploadingLogo, setUploadingLogo] = useState(false);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+
+    // Meta linking state
+    const [metaPages, setMetaPages] = useState<MetaPage[]>([]);
+    const [showMetaDropdown, setShowMetaDropdown] = useState(false);
+    const [metaLinking, setMetaLinking] = useState(false);
+    const [metaConnected, setMetaConnected] = useState(false);
+    const metaDropdownRef = useRef<HTMLDivElement>(null);
 
     const fetchClient = useCallback(async () => {
         try {
@@ -148,16 +166,204 @@ export default function ClientDetailPage() {
 
     useEffect(() => { fetchClient(); }, [fetchClient]);
 
-    const handleArchive = async () => {
-        if (!confirm("Are you sure you want to archive this client?")) return;
+    // Check Meta connection & close dropdown on outside click
+    useEffect(() => {
+        fetch("/api/meta/connection").then(r => r.json()).then(d => setMetaConnected(d.connected || false)).catch(() => { });
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (metaDropdownRef.current && !metaDropdownRef.current.contains(e.target as Node)) {
+                setShowMetaDropdown(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleMetaLinkClick = async () => {
+        if (showMetaDropdown) {
+            setShowMetaDropdown(false);
+            return;
+        }
+        // Fetch available pages
+        try {
+            const res = await fetch("/api/meta/pages");
+            if (res.ok) {
+                const data = await res.json();
+                setMetaPages(data.pages || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch Meta pages:", err);
+        }
+        setShowMetaDropdown(true);
+    };
+
+    const handleLinkToPage = async (pageId: string) => {
+        setMetaLinking(true);
+        try {
+            const res = await fetch(`/api/clients/${id}/meta-link`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ meta_page_id: pageId }),
+            });
+            if (res.ok) {
+                await fetchClient();
+                setShowMetaDropdown(false);
+            } else {
+                const err = await res.json();
+                alert(err.error || "Failed to link page");
+            }
+        } catch (err) {
+            console.error("Failed to link:", err);
+        } finally {
+            setMetaLinking(false);
+        }
+    };
+
+    const handleUnlinkMeta = async () => {
+        setMetaLinking(true);
+        try {
+            const res = await fetch(`/api/clients/${id}/meta-link`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ meta_page_id: null }),
+            });
+            if (res.ok) {
+                await fetchClient();
+            }
+        } catch (err) {
+            console.error("Failed to unlink:", err);
+        } finally {
+            setMetaLinking(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to permanently delete this client? This cannot be undone.")) return;
         setArchiving(true);
         try {
             const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
             if (res.ok) router.push("/clients");
         } catch (err) {
-            console.error("Failed to archive:", err);
+            console.error("Failed to delete:", err);
         } finally {
             setArchiving(false);
+        }
+    };
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !client) return;
+        setUploadingLogo(true);
+        try {
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient();
+
+            // Get current user
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                alert("Not authenticated");
+                return;
+            }
+
+            const ext = file.name.split(".").pop() || "png";
+            const filePath = `${user.id}/${id}/logo.${ext}`;
+
+            // Upload directly to Supabase Storage from the browser
+            const { error: uploadError } = await supabase.storage
+                .from("client-logos")
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    upsert: true,
+                });
+
+            if (uploadError) {
+                console.error("Upload error:", uploadError);
+                alert(`Upload failed: ${uploadError.message}`);
+                return;
+            }
+
+            // Get the public URL
+            const { data: urlData } = supabase.storage
+                .from("client-logos")
+                .getPublicUrl(filePath);
+
+            // Update client record via existing PATCH API
+            const res = await fetch(`/api/clients/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ logo_url: urlData.publicUrl }),
+            });
+
+            if (res.ok) {
+                const updated = await res.json();
+                setClient(updated);
+            } else {
+                alert("Logo uploaded but failed to save URL to client record");
+            }
+        } catch (err) {
+            console.error("Failed to upload logo:", err);
+            alert("Upload failed unexpectedly");
+        } finally {
+            setUploadingLogo(false);
+            if (logoInputRef.current) logoInputRef.current.value = "";
+        }
+    };
+
+    const handleLogoRemove = async () => {
+        if (!client || !confirm("Remove the client logo?")) return;
+        setUploadingLogo(true);
+        try {
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient();
+
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Delete from storage
+            const path = `${user.id}/${id}`;
+            const { data: files } = await supabase.storage
+                .from("client-logos")
+                .list(path);
+
+            if (files && files.length > 0) {
+                await supabase.storage
+                    .from("client-logos")
+                    .remove(files.map((f) => `${path}/${f.name}`));
+            }
+
+            // Nullify logo_url via existing PATCH API
+            const res = await fetch(`/api/clients/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ logo_url: null }),
+            });
+
+            if (res.ok) {
+                const updated = await res.json();
+                setClient(updated);
+            }
+        } catch (err) {
+            console.error("Failed to remove logo:", err);
+        } finally {
+            setUploadingLogo(false);
+        }
+    };
+
+    const handleStatusToggle = async () => {
+        if (!client) return;
+        const newStatus = client.status === "active" ? "past" : "active";
+        try {
+            const res = await fetch(`/api/clients/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                setClient(updated);
+            }
+        } catch (err) {
+            console.error("Failed to update status:", err);
         }
     };
 
@@ -297,9 +503,9 @@ export default function ClientDetailPage() {
                 subtitle={client.contact_name}
                 actions={
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={handleArchive} disabled={archiving} className="text-text-tertiary hover:text-error">
+                        <Button variant="ghost" size="sm" onClick={handleDelete} disabled={archiving} className="text-text-tertiary hover:text-error">
                             {archiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            Archive
+                            Delete
                         </Button>
                         <Link href="/clients" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                             <ArrowLeft className="w-4 h-4" /> Back to Clients
@@ -311,8 +517,45 @@ export default function ClientDetailPage() {
             <div className="p-6 max-w-5xl mx-auto space-y-6 animate-fade-in">
                 {/* Top Summary Bar */}
                 <div className="flex items-center gap-4 flex-wrap">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-200 to-rose-200 flex items-center justify-center shadow-sm">
-                        <span className="text-xl font-bold text-brand-800">{getInitials(client.business_name)}</span>
+                    {/* Logo / Avatar with upload */}
+                    <div className="relative group/avatar">
+                        <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/svg+xml"
+                            onChange={handleLogoUpload}
+                            className="hidden"
+                        />
+                        {client.logo_url ? (
+                            <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-sm border border-border">
+                                <img src={client.logo_url} alt={client.business_name} className="w-full h-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-200 to-rose-200 flex items-center justify-center shadow-sm">
+                                <span className="text-xl font-bold text-brand-800">{getInitials(client.business_name)}</span>
+                            </div>
+                        )}
+                        {/* Upload overlay */}
+                        <div
+                            onClick={() => !uploadingLogo && logoInputRef.current?.click()}
+                            className="absolute inset-0 rounded-2xl bg-black/50 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity cursor-pointer"
+                        >
+                            {uploadingLogo ? (
+                                <Loader2 className="w-5 h-5 text-white animate-spin" />
+                            ) : (
+                                <Camera className="w-5 h-5 text-white" />
+                            )}
+                        </div>
+                        {/* Remove logo button */}
+                        {client.logo_url && (
+                            <button
+                                onClick={handleLogoRemove}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity shadow-sm"
+                                title="Remove logo"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        )}
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -320,6 +563,79 @@ export default function ClientDetailPage() {
                             {client.is_priority && <Star className="w-5 h-5 text-brand-500 fill-brand-500 flex-shrink-0" />}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                            {/* Status toggle */}
+                            <button
+                                onClick={handleStatusToggle}
+                                className={cn(
+                                    "px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all border cursor-pointer",
+                                    client.status === "active"
+                                        ? "bg-sage-50 text-sage-700 border-sage-200 hover:bg-sage-100"
+                                        : "bg-warm-100 text-warm-600 border-warm-200 hover:bg-warm-200"
+                                )}
+                                title={`Click to mark as ${client.status === "active" ? "past" : "active"}`}
+                            >
+                                {client.status === "active" ? "Active" : "Past Client"}
+                            </button>
+                            {client.meta_page_id ? (
+                                <div className="flex items-center gap-1">
+                                    <Badge variant="default" size="sm" className="bg-blue-50 text-blue-600 border-blue-200 flex items-center gap-1">
+                                        <Facebook className="w-3 h-3" /> Linked to Meta
+                                    </Badge>
+                                    <button
+                                        onClick={handleUnlinkMeta}
+                                        disabled={metaLinking}
+                                        className="p-0.5 rounded hover:bg-rose-50 text-text-tertiary hover:text-rose-500 transition-colors"
+                                        title="Unlink from Meta page"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ) : metaConnected ? (
+                                <div className="relative" ref={metaDropdownRef}>
+                                    <button
+                                        onClick={handleMetaLinkClick}
+                                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border border-dashed border-blue-300 text-blue-500 hover:bg-blue-50 transition-all"
+                                    >
+                                        <Link2 className="w-3 h-3" />
+                                        Link to Meta Page
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                    {showMetaDropdown && (
+                                        <div className="absolute top-full left-0 mt-1 w-72 bg-surface border border-border rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto">
+                                            {metaPages.length === 0 ? (
+                                                <p className="p-3 text-xs text-text-tertiary text-center">No pages found</p>
+                                            ) : (
+                                                metaPages.map((page) => (
+                                                    <button
+                                                        key={page.id}
+                                                        onClick={() => handleLinkToPage(page.id)}
+                                                        disabled={metaLinking || page.already_synced}
+                                                        className={cn(
+                                                            "w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-hover transition-colors text-sm",
+                                                            page.already_synced && "opacity-50 cursor-not-allowed"
+                                                        )}
+                                                    >
+                                                        {page.picture_url ? (
+                                                            <img src={page.picture_url} alt="" className="w-7 h-7 rounded-md object-cover flex-shrink-0" />
+                                                        ) : (
+                                                            <div className="w-7 h-7 rounded-md bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                                                <Facebook className="w-3.5 h-3.5 text-blue-600" />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-medium truncate text-text-primary">{page.name}</p>
+                                                            {page.category && <p className="text-[10px] text-text-tertiary truncate">{page.category}</p>}
+                                                        </div>
+                                                        {page.already_synced && (
+                                                            <span className="text-[10px] text-text-tertiary">Linked</span>
+                                                        )}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : null}
                             {industry && <Badge variant="default" size="sm" className={`${industry.bg} ${industry.colour}`}>{industry.name}</Badge>}
                             {pkg && <Badge variant="default" size="sm" className="bg-lavender-50 text-lavender-500">{pkg.name} · {formatCurrency(pkg.price)}</Badge>}
                             {client.location_type && <Badge variant="outline" size="sm" className="capitalize">{client.location_type}</Badge>}
