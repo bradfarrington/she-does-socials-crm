@@ -23,15 +23,10 @@ export async function POST(
         .single();
 
     if (postError || !post) {
-        console.error("Post not found:", postError);
         return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    console.log("Publishing post:", { id: post.id, platform: post.platform, client_id: post.client_id });
-
     const client = post.clients as { id: string; business_name: string; meta_page_id: string | null } | null;
-
-    console.log("Client info:", { business_name: client?.business_name, meta_page_id: client?.meta_page_id });
 
     if (!client?.meta_page_id) {
         return NextResponse.json(
@@ -61,7 +56,6 @@ export async function POST(
             `https://graph.facebook.com/v21.0/me/accounts?access_token=${connection.access_token}`
         );
         const pagesData = await pagesRes.json();
-        console.log("Meta /me/accounts response:", JSON.stringify(pagesData).substring(0, 500));
 
         if (pagesData.error) {
             console.error("Meta /me/accounts error:", JSON.stringify(pagesData.error, null, 2));
@@ -83,7 +77,6 @@ export async function POST(
         }
 
         pageAccessToken = page.access_token;
-        console.log("Got page access token for page:", client.meta_page_id);
     } catch (err) {
         console.error("Failed to fetch page access token:", err);
         return NextResponse.json(
@@ -110,14 +103,32 @@ export async function POST(
     let scheduledTime: number | null = null;
     if (post.scheduled_date) {
         const timeStr = post.scheduled_time || "09:00";
-        const dateTime = new Date(`${post.scheduled_date}T${timeStr}:00`);
+        // Only append seconds if the time string is HH:MM (no seconds yet)
+        const normalizedTime = timeStr.split(":").length === 2 ? `${timeStr}:00` : timeStr;
+        const dateTimeStr = `${post.scheduled_date}T${normalizedTime}Z`;
+        const dateTime = new Date(dateTimeStr);
         const now = new Date();
         // Meta requires at least 10 minutes in the future for scheduling
         const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
 
-        if (dateTime > tenMinutesFromNow) {
+        console.log("[Meta Scheduling] Raw values:", {
+            scheduled_date: post.scheduled_date,
+            scheduled_time: post.scheduled_time,
+            dateTimeStr,
+            parsedValid: !isNaN(dateTime.getTime()),
+            parsedUnix: isNaN(dateTime.getTime()) ? "INVALID" : Math.floor(dateTime.getTime() / 1000),
+            nowISO: now.toISOString(),
+            isFuture: !isNaN(dateTime.getTime()) && dateTime > tenMinutesFromNow,
+        });
+
+        if (!isNaN(dateTime.getTime()) && dateTime > tenMinutesFromNow) {
             scheduledTime = Math.floor(dateTime.getTime() / 1000);
+            console.log("[Meta Scheduling] Will schedule for:", scheduledTime);
+        } else {
+            console.log("[Meta Scheduling] Date is invalid or NOT >10 min in the future — will publish immediately.");
         }
+    } else {
+        console.log("[Meta Scheduling] No scheduled_date on post — will publish immediately.");
     }
 
     // 6. Determine platform and publish
@@ -130,24 +141,65 @@ export async function POST(
 
             const hasMedia = post.media_urls && post.media_urls.length > 0;
 
-            if (hasMedia) {
-                // Photo post
+            if (hasMedia && scheduledTime) {
+                // Scheduled photo post: upload photo as unpublished, then schedule via /feed
                 const photoParams = new URLSearchParams({
                     url: post.media_urls[0],
+                    published: "false",
                     access_token: pageAccessToken,
                 });
-                if (fullMessage) photoParams.set("caption", fullMessage);
-                if (scheduledTime) {
-                    photoParams.set("scheduled_publish_time", String(scheduledTime));
-                    photoParams.set("published", "false");
-                }
 
                 const photoRes = await fetch(
                     `https://graph.facebook.com/v21.0/${client.meta_page_id}/photos`,
                     { method: "POST", body: photoParams }
                 );
                 const photoData = await photoRes.json();
-                console.log("Facebook photo response:", JSON.stringify(photoData));
+                console.log("[Meta] Unpublished photo upload response:", JSON.stringify(photoData, null, 2));
+
+                if (photoData.error) {
+                    return NextResponse.json(
+                        { error: `Facebook API error: ${photoData.error.message}` },
+                        { status: 500 }
+                    );
+                }
+
+                // Now schedule a feed post with the unpublished photo attached
+                const feedParams = new URLSearchParams({
+                    access_token: pageAccessToken,
+                    scheduled_publish_time: String(scheduledTime),
+                    published: "false",
+                });
+                feedParams.set("attached_media[0]", JSON.stringify({ media_fbid: photoData.id }));
+                if (fullMessage) feedParams.set("message", fullMessage);
+
+                const feedRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/feed`,
+                    { method: "POST", body: feedParams }
+                );
+                const feedData = await feedRes.json();
+                console.log("[Meta] Scheduled photo feed response:", JSON.stringify(feedData, null, 2));
+
+                if (feedData.error) {
+                    return NextResponse.json(
+                        { error: `Facebook API error: ${feedData.error.message}` },
+                        { status: 500 }
+                    );
+                }
+                metaPostId = feedData.id;
+            } else if (hasMedia) {
+                // Immediate photo post — use /photos directly
+                const photoParams = new URLSearchParams({
+                    url: post.media_urls[0],
+                    access_token: pageAccessToken,
+                });
+                if (fullMessage) photoParams.set("caption", fullMessage);
+
+                const photoRes = await fetch(
+                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/photos`,
+                    { method: "POST", body: photoParams }
+                );
+                const photoData = await photoRes.json();
+                console.log("[Meta] Facebook photo response:", JSON.stringify(photoData, null, 2));
 
                 if (photoData.error) {
                     return NextResponse.json(
@@ -157,7 +209,7 @@ export async function POST(
                 }
                 metaPostId = photoData.id || photoData.post_id;
             } else {
-                // Text-only post
+                // Text-only post — use /feed (supports scheduling)
                 const feedParams = new URLSearchParams({
                     message: fullMessage,
                     access_token: pageAccessToken,
@@ -172,7 +224,7 @@ export async function POST(
                     { method: "POST", body: feedParams }
                 );
                 const feedData = await feedRes.json();
-                console.log("Facebook feed response:", JSON.stringify(feedData));
+                console.log("[Meta] Facebook feed response:", JSON.stringify(feedData, null, 2));
 
                 if (feedData.error) {
                     return NextResponse.json(
@@ -226,11 +278,8 @@ export async function POST(
                 containerParams.image_url = mediaUrl;
             }
 
-            if (scheduledTime) {
-                // Instagram scheduling: publish_time parameter (ISO 8601)
-                containerParams.is_published = "false";
-            }
-
+            // Create the container (without scheduling params — scheduling via
+            // published=false requires Meta App Review / whitelist approval)
             const containerRes = await fetch(
                 `https://graph.facebook.com/v21.0/${igUserId}/media`,
                 {
@@ -240,6 +289,7 @@ export async function POST(
                 }
             );
             const containerData = await containerRes.json();
+            console.log("[Meta] Instagram container response:", JSON.stringify(containerData, null, 2));
 
             if (containerData.error) {
                 return NextResponse.json(
@@ -248,7 +298,7 @@ export async function POST(
                 );
             }
 
-            // Step 2: Publish the media container
+            // Step 2: Publish the media container immediately
             const publishRes = await fetch(
                 `https://graph.facebook.com/v21.0/${igUserId}/media_publish`,
                 {

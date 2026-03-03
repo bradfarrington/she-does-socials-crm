@@ -389,11 +389,27 @@ const previewComponents: Record<Platform, React.FC<{ clientName: string; hook?: 
     linkedin: LinkedInPreview,
 };
 
+// Form data uses platforms (array) while DB uses platform (singular)
+interface PostFormData {
+    client_id: string;
+    client_name?: string;
+    platforms: Platform[];
+    content_type: ContentType;
+    status: ContentStatus;
+    purpose?: ContentPurpose;
+    scheduled_date: string;
+    scheduled_time: string;
+    caption: string;
+    hook: string;
+    cta: string;
+    notes: string;
+}
+
 // ─── Post Modal ─────────────────────────────────────────
 function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: { post?: ContentPost | null; date?: string; isOpen: boolean; onClose: () => void; onSave: (post: ContentPost) => void; onDelete?: (id: string) => void; clients: SimpleClient[] }) {
     const isEdit = !!post;
-    const [formData, setFormData] = useState<Partial<ContentPost>>({
-        client_id: post?.client_id || "", platform: post?.platform || "instagram", content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getTodayDateKey(), scheduled_time: post?.scheduled_time || "09:00", caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "",
+    const [formData, setFormData] = useState<PostFormData>({
+        client_id: post?.client_id || "", platforms: post?.platform ? [post.platform] : ["instagram"], content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getTodayDateKey(), scheduled_time: post?.scheduled_time || "09:00", caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "",
     });
     const [previewPlatform, setPreviewPlatform] = useState<Platform>("instagram");
     const [mediaPreview, setMediaPreview] = useState<{ url: string; type: "image" | "video" } | null>(null);
@@ -425,7 +441,8 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: {
     };
 
     React.useEffect(() => {
-        setFormData({ client_id: post?.client_id || "", platform: post?.platform || "instagram", content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getTodayDateKey(), scheduled_time: post?.scheduled_time || "09:00", caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "" });
+        const platforms = post?.platform ? [post.platform] : ["instagram" as Platform];
+        setFormData({ client_id: post?.client_id || "", platforms, content_type: post?.content_type || "static_post", status: post?.status || "idea", purpose: post?.purpose || undefined, scheduled_date: post?.scheduled_date || date || getTodayDateKey(), scheduled_time: post?.scheduled_time || "09:00", caption: post?.caption || "", hook: post?.hook || "", cta: post?.cta || "", notes: post?.notes || "" });
         // Load existing media preview
         if (post?.media_urls && post.media_urls.length > 0) {
             const url = post.media_urls[0];
@@ -441,10 +458,15 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: {
     const clientPlatforms = (selectedClient?.platforms || []) as Platform[];
     const availablePlatforms = clientPlatforms.length > 0 ? clientPlatforms : (Object.keys(platformConfig) as Platform[]);
 
-    // Auto-select first available platform if current one isn't available
+    // Auto-select first available platform if current ones aren't available
     React.useEffect(() => {
-        if (clientPlatforms.length > 0 && formData.platform && !clientPlatforms.includes(formData.platform)) {
-            setFormData((prev) => ({ ...prev, platform: clientPlatforms[0] }));
+        if (clientPlatforms.length > 0) {
+            setFormData((prev) => ({
+                ...prev,
+                platforms: prev.platforms.filter((p) => clientPlatforms.includes(p)).length > 0
+                    ? prev.platforms.filter((p) => clientPlatforms.includes(p))
+                    : [clientPlatforms[0]],
+            }));
         }
         if (clientPlatforms.length > 0 && !clientPlatforms.includes(previewPlatform)) {
             setPreviewPlatform(clientPlatforms[0]);
@@ -495,48 +517,58 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: {
                     mediaUrls = [uploadData.url];
                 }
             }
+            const platformsToSave = formData.platforms.length > 0 ? formData.platforms : ["instagram" as Platform];
 
-            const payload = {
-                client_id: formData.client_id,
-                platform: formData.platform || "instagram",
-                content_type: formData.content_type || "static_post",
-                status: formData.status || "idea",
-                purpose: formData.purpose || null,
-                scheduled_date: formData.scheduled_date || getTodayDateKey(),
-                scheduled_time: formData.scheduled_time || "09:00",
-                caption: formData.caption || null,
-                hook: formData.hook || null,
-                cta: formData.cta || null,
-                notes: formData.notes || null,
-                media_urls: mediaUrls,
-            };
+            const savedPosts: ContentPost[] = [];
 
-            let savedPost: ContentPost;
-            if (isEdit && post?.id) {
-                const res = await fetch(`/api/posts/${post.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                savedPost = await res.json();
-            } else {
-                const res = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                savedPost = await res.json();
-            }
+            for (const platform of platformsToSave) {
+                const payload = {
+                    client_id: formData.client_id,
+                    platform,
+                    content_type: formData.content_type || "static_post",
+                    status: formData.status || "idea",
+                    purpose: formData.purpose || null,
+                    scheduled_date: formData.scheduled_date || getTodayDateKey(),
+                    scheduled_time: formData.scheduled_time || "09:00",
+                    caption: formData.caption || null,
+                    hook: formData.hook || null,
+                    cta: formData.cta || null,
+                    notes: formData.notes || null,
+                    media_urls: mediaUrls,
+                };
 
-            // Enrich with client_name for local display
-            const clientInfo = clients.find((c) => c.id === savedPost.client_id);
-            savedPost.client_name = clientInfo?.business_name || "Unknown";
-
-            // Publish to Meta if requested
-            if (andPublish && savedPost.id) {
-                setPublishing(true);
-                const pubRes = await fetch(`/api/posts/${savedPost.id}/publish`, { method: "POST" });
-                if (pubRes.ok) {
-                    const pubData = await pubRes.json();
-                    savedPost = pubData.post;
-                    savedPost.client_name = clientInfo?.business_name || "Unknown";
+                let savedPost: ContentPost;
+                if (isEdit && post?.id && platformsToSave.length === 1) {
+                    const res = await fetch(`/api/posts/${post.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                    savedPost = await res.json();
+                } else if (isEdit && post?.id && platform === post.platform) {
+                    const res = await fetch(`/api/posts/${post.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                    savedPost = await res.json();
+                } else {
+                    const res = await fetch("/api/posts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                    savedPost = await res.json();
                 }
-                setPublishing(false);
+
+                // Enrich with client_name
+                const clientInfo = clients.find((c) => c.id === savedPost.client_id);
+                savedPost.client_name = clientInfo?.business_name || "Unknown";
+
+                // Publish to Meta if requested
+                if (andPublish && savedPost.id && (platform === "facebook" || platform === "instagram")) {
+                    setPublishing(true);
+                    const pubRes = await fetch(`/api/posts/${savedPost.id}/publish`, { method: "POST" });
+                    if (pubRes.ok) {
+                        const pubData = await pubRes.json();
+                        savedPost = pubData.post;
+                        savedPost.client_name = clientInfo?.business_name || "Unknown";
+                    }
+                    setPublishing(false);
+                }
+
+                savedPosts.push(savedPost);
             }
 
-            onSave(savedPost);
+            savedPosts.forEach((p) => onSave(p));
             onClose();
         } catch (err) {
             console.error("Failed to save post:", err);
@@ -568,11 +600,21 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: {
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <label className="block text-sm font-medium text-text-secondary">Platform</label>
+                                <label className="block text-sm font-medium text-text-secondary">Platforms</label>
                                 <div className="flex flex-wrap gap-1.5">
                                     {availablePlatforms.map((p) => {
-                                        const config = platformConfig[p]; if (!config) return null; const Icon = config.icon; return (
-                                            <button key={p} onClick={() => setFormData({ ...formData, platform: p })} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", formData.platform === p ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
+                                        const config = platformConfig[p]; if (!config) return null; const Icon = config.icon;
+                                        const isSelected = formData.platforms.includes(p);
+                                        return (
+                                            <button key={p} onClick={() => {
+                                                const newPlatforms = isSelected
+                                                    ? formData.platforms.filter((x) => x !== p)
+                                                    : [...formData.platforms, p];
+                                                if (newPlatforms.length > 0) {
+                                                    setFormData({ ...formData, platforms: newPlatforms as Platform[] });
+                                                    if (!newPlatforms.includes(previewPlatform)) setPreviewPlatform(newPlatforms[0] as Platform);
+                                                }
+                                            }} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border", isSelected ? "bg-brand-50 text-brand-700 border-brand-300" : "bg-surface border-border text-text-secondary hover:bg-surface-hover")}>
                                                 <Icon className="w-3.5 h-3.5" />{config.label}
                                             </button>
                                         );
@@ -676,9 +718,9 @@ function PostModal({ post, date, isOpen, onClose, onSave, onDelete, clients }: {
                     <div className="col-span-2 overflow-y-auto bg-surface-secondary/50 flex flex-col">
                         <div className="p-4 border-b border-border-light flex-shrink-0">
                             <h3 className="text-sm font-semibold text-text-primary mb-3">Platform Preview</h3>
-                            {/* Platform tabs */}
+                            {/* Platform tabs — only show selected platforms */}
                             <div className="flex items-center gap-1.5">
-                                {availablePlatforms.map((p) => {
+                                {formData.platforms.map((p) => {
                                     const config = platformConfig[p]; if (!config) return null; const Icon = config.icon;
                                     return (
                                         <button key={p} onClick={() => setPreviewPlatform(p)} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border", previewPlatform === p ? "bg-white text-text-primary border-border shadow-sm" : "bg-transparent border-transparent text-text-tertiary hover:text-text-secondary hover:bg-surface-hover")}>
