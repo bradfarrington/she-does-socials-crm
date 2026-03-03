@@ -39,8 +39,17 @@ import {
     Link2,
     Unlink,
     ChevronDown,
+    Receipt,
+    FileText,
+    Send,
+    AlertTriangle,
+    ArrowUpRight,
+    Clock,
+    Ban,
+    RefreshCw,
 } from "lucide-react";
 import { cn, getInitials, formatDate, formatCurrency } from "@/lib/utils";
+import { ColourPicker } from "@/components/ui/colour-picker";
 import type { IndustryRecord, MetaPage } from "@/lib/types";
 
 interface ClientDetail {
@@ -867,6 +876,8 @@ export default function ClientDetailPage() {
                         <CardContent className="space-y-4">
                             {isEditing("brand") ? (
                                 <div className="space-y-4">
+                                    {/* Brand Colours */}
+                                    <BrandColourEditor colours={dArr("brand_colours")} onChange={(colours) => setD("brand_colours", colours)} />
                                     {/* Voice */}
                                     <div className="space-y-2">
                                         <label className="block text-sm font-medium text-text-secondary">Brand Voice</label>
@@ -1003,6 +1014,9 @@ export default function ClientDetailPage() {
                     </CardContent>
                 </Card>
 
+                {/* ──────── 6. INVOICES ──────── */}
+                <ClientInvoicesSection clientId={id} />
+
                 {/* ──────── 7. SCHEDULED CONTENT ──────── */}
                 <ClientContentSection clientId={id} />
                 <div className="flex items-center justify-between text-xs text-text-tertiary pt-2 border-t border-border">
@@ -1095,6 +1109,145 @@ function ClientContentSection({ clientId }: { clientId: string }) {
     );
 }
 
+/* ── Client Invoices Section ── */
+interface ClientInvoice {
+    id: string;
+    invoice_number: string;
+    client_id: string;
+    client_name: string;
+    description: string;
+    status: "draft" | "sent" | "paid" | "overdue" | "cancelled" | "void";
+    amount: number;
+    due_date: string;
+    issued_date: string;
+    paid_date?: string;
+    recurring: string;
+}
+
+const invoiceStatusConfig: Record<string, { label: string; colour: string; bg: string; icon: React.ElementType }> = {
+    draft: { label: "Draft", colour: "text-warm-600", bg: "bg-warm-100", icon: FileText },
+    sent: { label: "Sent", colour: "text-blue-600", bg: "bg-blue-50", icon: Send },
+    paid: { label: "Paid", colour: "text-sage-600", bg: "bg-sage-50", icon: CheckCircle2 },
+    overdue: { label: "Overdue", colour: "text-rose-600", bg: "bg-rose-50", icon: AlertTriangle },
+    cancelled: { label: "Cancelled", colour: "text-text-tertiary", bg: "bg-surface-tertiary", icon: X },
+    void: { label: "Void", colour: "text-text-tertiary", bg: "bg-surface-tertiary", icon: Ban },
+};
+
+const invoiceRecurringLabels: Record<string, string> = { none: "One-off", monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
+
+function ClientInvoicesSection({ clientId }: { clientId: string }) {
+    const [invoices, setInvoices] = React.useState<ClientInvoice[]>([]);
+    const [loading, setLoading] = React.useState(true);
+
+    React.useEffect(() => {
+        fetch(`/api/invoices?client_id=${clientId}`)
+            .then((r) => r.ok ? r.json() : [])
+            .then((data: ClientInvoice[]) => setInvoices(data || []))
+            .catch(() => setInvoices([]))
+            .finally(() => setLoading(false));
+    }, [clientId]);
+
+    const activeInvoices = invoices.filter((i) => ["sent", "paid", "overdue"].includes(i.status));
+    const stats = {
+        total: activeInvoices.reduce((s, i) => s + Number(i.amount), 0),
+        paid: activeInvoices.filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0),
+        outstanding: activeInvoices.filter((i) => ["sent", "overdue"].includes(i.status)).reduce((s, i) => s + Number(i.amount), 0),
+        overdue: activeInvoices.filter((i) => i.status === "overdue").reduce((s, i) => s + Number(i.amount), 0),
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-brand-500" /> Invoices
+                    </CardTitle>
+                    <a href="/invoices" className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors">
+                        View All <ArrowUpRight className="w-3 h-3" />
+                    </a>
+                </div>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-5 h-5 text-text-tertiary animate-spin" />
+                    </div>
+                ) : invoices.length === 0 ? (
+                    <p className="text-sm text-text-tertiary italic">No invoices for this client yet.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-lavender-50 border border-lavender-100">
+                                <Receipt className="w-4 h-4 text-lavender-500" />
+                                <div>
+                                    <p className="text-sm font-display font-bold text-text-primary">{formatCurrency(stats.total)}</p>
+                                    <p className="text-[10px] text-text-tertiary">Total</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-sage-50 border border-sage-100">
+                                <CheckCircle2 className="w-4 h-4 text-sage-500" />
+                                <div>
+                                    <p className="text-sm font-display font-bold text-text-primary">{formatCurrency(stats.paid)}</p>
+                                    <p className="text-[10px] text-text-tertiary">Paid</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-brand-50 border border-brand-100">
+                                <Clock className="w-4 h-4 text-brand-500" />
+                                <div>
+                                    <p className="text-sm font-display font-bold text-text-primary">{formatCurrency(stats.outstanding)}</p>
+                                    <p className="text-[10px] text-text-tertiary">Outstanding</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-rose-50 border border-rose-100">
+                                <AlertTriangle className="w-4 h-4 text-rose-500" />
+                                <div>
+                                    <p className="text-sm font-display font-bold text-text-primary">{formatCurrency(stats.overdue)}</p>
+                                    <p className="text-[10px] text-text-tertiary">Overdue</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Invoice Table */}
+                        <div className="overflow-x-auto -mx-6">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="border-b border-border-light">
+                                        <th className="text-left px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Invoice</th>
+                                        <th className="text-left px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Description</th>
+                                        <th className="text-left px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Status</th>
+                                        <th className="text-right px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Amount</th>
+                                        <th className="text-left px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Due</th>
+                                        <th className="text-left px-6 py-2.5 text-[10px] font-semibold text-text-tertiary uppercase tracking-wider">Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {invoices.map((inv) => {
+                                        const status = invoiceStatusConfig[inv.status];
+                                        if (!status) return null;
+                                        const StatusIcon = status.icon;
+                                        const isVoid = inv.status === "void";
+                                        return (
+                                            <tr key={inv.id} className={cn("border-b border-border-light hover:bg-surface-hover/50 transition-colors", isVoid && "opacity-50")}>
+                                                <td className="px-6 py-3"><span className={cn("text-xs font-semibold text-text-primary", isVoid && "line-through")}>{inv.invoice_number}</span></td>
+                                                <td className="px-6 py-3"><span className={cn("text-xs text-text-secondary truncate max-w-[200px] block", isVoid && "line-through")}>{inv.description}</span></td>
+                                                <td className="px-6 py-3"><Badge size="sm" className={cn(status.bg, status.colour)}><StatusIcon className="w-2.5 h-2.5" />{status.label}</Badge></td>
+                                                <td className="px-6 py-3 text-right"><span className={cn("text-sm font-semibold text-text-primary", isVoid && "line-through")}>{formatCurrency(Number(inv.amount))}</span></td>
+                                                <td className="px-6 py-3"><span className={cn("text-xs", inv.status === "overdue" ? "text-rose-600 font-semibold" : "text-text-secondary")}>{formatDate(inv.due_date)}</span></td>
+                                                <td className="px-6 py-3">{inv.recurring !== "none" && <Badge variant="outline" size="sm"><RefreshCw className="w-2.5 h-2.5" />{invoiceRecurringLabels[inv.recurring]}</Badge>}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 /* ── Helper components ── */
 
 function EditToggle({ section, isEditing, saving, onEdit, onSave, onCancel }: {
@@ -1145,4 +1298,49 @@ function TextBlock({ label, value, accent, green, red }: { label: string; value:
 
 function EmptyState({ children }: { children: React.ReactNode }) {
     return <p className="text-sm text-text-tertiary italic">{children}</p>;
+}
+
+function BrandColourEditor({ colours, onChange }: { colours: string[]; onChange: (colours: string[]) => void }) {
+    const [newColour, setNewColour] = React.useState("#f29a5e");
+
+    const addColour = () => {
+        if (newColour && !colours.includes(newColour)) {
+            onChange([...colours, newColour]);
+        }
+    };
+
+    const removeColour = (colour: string) => {
+        onChange(colours.filter((c) => c !== colour));
+    };
+
+    return (
+        <div className="space-y-3">
+            <label className="block text-sm font-medium text-text-secondary">Brand Colours</label>
+            <div className="flex items-center gap-3">
+                <ColourPicker value={newColour} onChange={setNewColour} />
+                <Input
+                    value={newColour}
+                    onChange={(e) => setNewColour(e.target.value)}
+                    className="w-28 font-mono text-xs"
+                    placeholder="#000000"
+                />
+                <Button variant="secondary" size="sm" onClick={addColour}>
+                    <Plus className="w-4 h-4" /> Add
+                </Button>
+            </div>
+            {colours.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                    {colours.map((colour) => (
+                        <div key={colour} className="flex items-center gap-1.5 bg-surface-secondary rounded-full px-2.5 py-1 border border-border">
+                            <div className="w-4 h-4 rounded-full border border-border" style={{ backgroundColor: colour }} />
+                            <span className="text-xs text-text-secondary font-mono">{colour}</span>
+                            <button onClick={() => removeColour(colour)} className="text-text-tertiary hover:text-error transition-colors">
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }

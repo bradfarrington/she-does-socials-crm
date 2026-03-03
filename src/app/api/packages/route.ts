@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         .single();
 
     if (error) {
+        console.error("POST /api/packages error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json(data, { status: 201 });

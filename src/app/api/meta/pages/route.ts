@@ -30,7 +30,7 @@ export async function GET() {
 
         // 1. Fetch pages via /me/accounts (direct page roles)
         let nextUrl: string | null =
-            `https://graph.facebook.com/v21.0/me/accounts?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`;
+            `https://graph.facebook.com/v25.0/me/accounts?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`;
 
         while (nextUrl) {
             const res: Response = await fetch(nextUrl);
@@ -53,7 +53,7 @@ export async function GET() {
         // 2. Fetch pages via Business accounts (Business Manager access)
         try {
             const bizRes: Response = await fetch(
-                `https://graph.facebook.com/v21.0/me/businesses?fields=id,name&access_token=${connection.access_token}`
+                `https://graph.facebook.com/v25.0/me/businesses?fields=id,name&access_token=${connection.access_token}`
             );
             const bizData: { data?: { id: string; name: string }[]; error?: { message?: string } } = await bizRes.json();
 
@@ -61,7 +61,7 @@ export async function GET() {
                 for (const biz of bizData.data) {
                     // Fetch owned pages
                     const ownedRes: Response = await fetch(
-                        `https://graph.facebook.com/v21.0/${biz.id}/owned_pages?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`
+                        `https://graph.facebook.com/v25.0/${biz.id}/owned_pages?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`
                     );
                     const ownedData: { data?: Record<string, unknown>[]; error?: { message?: string } } = await ownedRes.json();
 
@@ -75,7 +75,7 @@ export async function GET() {
 
                     // Fetch client pages (pages managed for other businesses)
                     const clientRes: Response = await fetch(
-                        `https://graph.facebook.com/v21.0/${biz.id}/client_pages?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`
+                        `https://graph.facebook.com/v25.0/${biz.id}/client_pages?fields=${encodeURIComponent(fields)}&limit=100&access_token=${connection.access_token}`
                     );
                     const clientData: { data?: Record<string, unknown>[]; error?: { message?: string } } = await clientRes.json();
 

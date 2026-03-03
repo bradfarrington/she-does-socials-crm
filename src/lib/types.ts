@@ -170,7 +170,8 @@ export type InvoiceStatus =
     | "sent"
     | "paid"
     | "overdue"
-    | "cancelled";
+    | "cancelled"
+    | "void";
 
 export interface Invoice {
     id: string;

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
     try {
         // 1. Exchange code for short-lived token
-        const tokenUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
+        const tokenUrl = new URL("https://graph.facebook.com/v25.0/oauth/access_token");
         tokenUrl.searchParams.set("client_id", appId);
         tokenUrl.searchParams.set("client_secret", appSecret);
         tokenUrl.searchParams.set("redirect_uri", redirectUri);
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         const shortLivedToken = tokenData.access_token;
 
         // 2. Exchange for long-lived token (~60 days)
-        const longLivedUrl = new URL("https://graph.facebook.com/v21.0/oauth/access_token");
+        const longLivedUrl = new URL("https://graph.facebook.com/v25.0/oauth/access_token");
         longLivedUrl.searchParams.set("grant_type", "fb_exchange_token");
         longLivedUrl.searchParams.set("client_id", appId);
         longLivedUrl.searchParams.set("client_secret", appSecret);
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
         // 3. Get user info from Meta
         const meRes = await fetch(
-            `https://graph.facebook.com/v21.0/me?fields=id,name&access_token=${accessToken}`
+            `https://graph.facebook.com/v25.0/me?fields=id,name&access_token=${accessToken}`
         );
         const meData = await meRes.json();
 

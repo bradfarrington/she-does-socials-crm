@@ -17,12 +17,15 @@ export async function GET() {
         "pages_show_list",
         "pages_read_engagement",
         "pages_manage_posts",
+        "pages_read_user_content",
         "business_management",
         "instagram_basic",
         "instagram_content_publish",
+        "instagram_manage_insights",
+        "read_insights",
     ].join(",");
 
-    const authUrl = new URL("https://www.facebook.com/v21.0/dialog/oauth");
+    const authUrl = new URL("https://www.facebook.com/v25.0/dialog/oauth");
     authUrl.searchParams.set("client_id", appId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("scope", scopes);

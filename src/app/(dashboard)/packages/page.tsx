@@ -194,6 +194,11 @@ function PackageModal({ pkg, isOpen, onClose, onSave, onDelete, isNew }: {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, pkg, isNew]);
 
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
     if (!isOpen) return null;
 
     const deliverables = f.deliverables || [""];
@@ -224,11 +229,6 @@ function PackageModal({ pkg, isOpen, onClose, onSave, onDelete, isNew }: {
         });
         onClose();
     };
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
 
     const inputCls = "flex h-10 w-full rounded-lg border border-border bg-surface px-3.5 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-brand-400/40 focus:border-brand-400 transition-all";
 

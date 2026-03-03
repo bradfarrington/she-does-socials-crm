@@ -53,7 +53,7 @@ export async function POST(
     let pageAccessToken: string | null = null;
     try {
         const pagesRes = await fetch(
-            `https://graph.facebook.com/v21.0/me/accounts?access_token=${connection.access_token}`
+            `https://graph.facebook.com/v25.0/me/accounts?access_token=${connection.access_token}`
         );
         const pagesData = await pagesRes.json();
 
@@ -150,7 +150,7 @@ export async function POST(
                 });
 
                 const photoRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/photos`,
+                    `https://graph.facebook.com/v25.0/${client.meta_page_id}/photos`,
                     { method: "POST", body: photoParams }
                 );
                 const photoData = await photoRes.json();
@@ -173,7 +173,7 @@ export async function POST(
                 if (fullMessage) feedParams.set("message", fullMessage);
 
                 const feedRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/feed`,
+                    `https://graph.facebook.com/v25.0/${client.meta_page_id}/feed`,
                     { method: "POST", body: feedParams }
                 );
                 const feedData = await feedRes.json();
@@ -195,7 +195,7 @@ export async function POST(
                 if (fullMessage) photoParams.set("caption", fullMessage);
 
                 const photoRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/photos`,
+                    `https://graph.facebook.com/v25.0/${client.meta_page_id}/photos`,
                     { method: "POST", body: photoParams }
                 );
                 const photoData = await photoRes.json();
@@ -220,7 +220,7 @@ export async function POST(
                 }
 
                 const feedRes = await fetch(
-                    `https://graph.facebook.com/v21.0/${client.meta_page_id}/feed`,
+                    `https://graph.facebook.com/v25.0/${client.meta_page_id}/feed`,
                     { method: "POST", body: feedParams }
                 );
                 const feedData = await feedRes.json();
@@ -242,7 +242,7 @@ export async function POST(
 
             // First get the Instagram Business Account ID from the Facebook Page
             const igRes = await fetch(
-                `https://graph.facebook.com/v21.0/${client.meta_page_id}?fields=instagram_business_account&access_token=${pageAccessToken}`
+                `https://graph.facebook.com/v25.0/${client.meta_page_id}?fields=instagram_business_account&access_token=${pageAccessToken}`
             );
             const igData = await igRes.json();
             const igUserId = igData.instagram_business_account?.id;
@@ -281,7 +281,7 @@ export async function POST(
             // Create the container (without scheduling params — scheduling via
             // published=false requires Meta App Review / whitelist approval)
             const containerRes = await fetch(
-                `https://graph.facebook.com/v21.0/${igUserId}/media`,
+                `https://graph.facebook.com/v25.0/${igUserId}/media`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -300,7 +300,7 @@ export async function POST(
 
             // Step 2: Publish the media container immediately
             const publishRes = await fetch(
-                `https://graph.facebook.com/v21.0/${igUserId}/media_publish`,
+                `https://graph.facebook.com/v25.0/${igUserId}/media_publish`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
